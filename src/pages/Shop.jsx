@@ -18,7 +18,7 @@ function Shop({ isAuthenticated, onNavigate, initialCategory = 'all', initialSea
   const [category, setCategory] = useState(initialCategory)
   const [sort, setSort] = useState('popular')
   const [minPrice, setMinPrice] = useState('')
-  const [maxPrice, setMaxPrice] = useState('25000000')
+  const [maxPrice, setMaxPrice] = useState('')
 
   // State baru untuk menampung data dari Supabase dan status loading
   const [catalog, setCatalog] = useState([])
@@ -32,22 +32,37 @@ function Shop({ isAuthenticated, onNavigate, initialCategory = 'all', initialSea
     setCategory(initialCategory)
   }, [initialCategory])
 
-  // AMBIL DATA DARI TABEL LISTINGS SUPABASE
+  // AMBIL DATA DARI TABEL LISTINGS DAN CROSS-CHECK DENGAN WISHLIST CLOUD
   useEffect(() => {
     async function getLiveMarketplaceData() {
       setLoading(true)
       try {
-        const { data, error } = await supabase
+        // 1. Ambil data produk listings aktif dari PostgreSQL
+        const { data: listingsData, error } = await supabase
           .from('listings')
           .select('*')
-          .eq('status', 'active') // Hanya ambil produk yang statusnya belum terjual
+          .in('status', ['available', 'active']) 
           .order('created_at', { ascending: false })
 
         if (error) throw error
 
-        if (data) {
+        // 2. Ambil daftar barang yang difavoritkan oleh pengguna aktif jika sudah masuk sesi
+        let wishlistedIds = []
+        const { data: { session } } = await supabase.auth.getSession()
+        if (session?.user) {
+          const { data: wishData } = await supabase
+            .from('wishlists')
+            .select('listing_id')
+            .eq('user_id', session.user.id)
+          
+          if (wishData) {
+            wishlistedIds = wishData.map(w => w.listing_id)
+          }
+        }
+
+        if (listingsData) {
           // Format skema kolom database agar cocok dengan properti yang dibaca ProductCard bawaan frontend
-          const formattedData = data.map((item) => ({
+          const formattedData = listingsData.map((item) => ({
             id: item.id,
             name: item.name,          // Sesuai form.name
             category: item.category,  // Sesuai form.category
@@ -57,7 +72,9 @@ function Shop({ isAuthenticated, onNavigate, initialCategory = 'all', initialSea
             oldPriceValue: item.old_price_value ? Number(item.old_price_value) : 0,
             badge: item.badge,        // 'BEKAS' / 'REFURBISH'
             score: item.score,        // '85%', '90%', dll
-            image: item.image_url || '/placeholder.svg'
+            image: item.image_url || '/placeholder.svg',
+            // 🌟 SUNTIKKAN PROPERTI BARU: Bernilai TRUE jika id produk ada di daftar wishlist pengguna
+            isFav: wishlistedIds.includes(item.id) 
           }))
           setCatalog(formattedData)
         }
@@ -71,20 +88,29 @@ function Shop({ isAuthenticated, onNavigate, initialCategory = 'all', initialSea
     getLiveMarketplaceData()
   }, [listingsVersion])
 
-  // Fungsi pembantu menghitung jumlah produk dinamis per kategori dari state catalog Supabase
+  // Pembersihan fungsi hitung agar akurat dan aman dari bug 'undefined'
   const countLiveProductsByCategory = (catId) => {
+    if (!catalog) return 0
     if (catId === 'all') return catalog.length
-    return catalog.filter(item => item.category === catId).type || catalog.filter(item => item.category === catId).length
+    
+    // Melakukan pengecekan huruf kecil/besar (case-insensitive) agar aman dari kesalahan ketik di DB
+    return catalog.filter(item => (item.category || '').toLowerCase() === catId.toLowerCase()).length
   }
 
   // LOGIKA MANIPULASI FILTER & SORTING (100% Menggunakan State Terkoneksi Supabase)
   const filtered = useMemo(() => {
     const min = parsePriceValue(minPrice)
+    
+    // Jika maxPrice kosong, otomatis gunakan fallback Infinity (Tak Terhingga) agar produk mahal lolos sensor
     const max = parsePriceValue(maxPrice) || Infinity
     const query = search.trim().toLowerCase()
 
     let list = catalog.filter((item) => {
-      const inCategory = category === 'all' || item.category === category
+      // Penyelarasan filter kategori siber (Pencocokan Huruf Kecil/Besar)
+      const itemCat = (item.category || '').toLowerCase().trim()
+      const selectedCat = category.toLowerCase().trim()
+
+      const inCategory = selectedCat === 'all' || itemCat === selectedCat
       const inSearch = !query || item.name.toLowerCase().includes(query)
       const inPrice = item.priceValue >= min && item.priceValue <= max
       return inCategory && inSearch && inPrice
@@ -140,15 +166,18 @@ function Shop({ isAuthenticated, onNavigate, initialCategory = 'all', initialSea
               />
               <input
                 type="number"
-                placeholder="25000000"
+                // Mengubah placeholder agar informatif saat kosong
+                placeholder="Tanpa Batas" 
                 value={maxPrice}
                 onChange={(event) => setMaxPrice(event.target.value)}
                 aria-label="Harga maksimum"
               />
             </div>
+            
+            {/* Kondisional teks info agar memunculkan tulisan 'Tanpa Batas' jika state kosong */}
             <p className="shop-price-hint">
-              Rp {Number(minPrice || 0).toLocaleString('id-ID')} - Rp{' '}
-              {Number(maxPrice || 25000000).toLocaleString('id-ID')}
+              Rp {Number(minPrice || 0).toLocaleString('id-ID')} - {' '}
+              {maxPrice ? `Rp ${Number(maxPrice).toLocaleString('id-ID')}` : 'Tanpa Batas'}
             </p>
           </section>
         </aside>

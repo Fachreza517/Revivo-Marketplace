@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import StoreLayout from '../components/StoreLayout.jsx'
 import { listingFormCategories } from '../data/localData.js'
 import { readImageFiles } from '../data/userListings.js'
@@ -18,15 +18,78 @@ const INITIAL_FORM = {
   oldPriceValue: '',
   stock: '1',
   location: '',
+  tech_spec: '' 
 }
 
-function JualBarang({ user, isAuthenticated, onNavigate, onListingCreated }) {
+// 🌟 DIOPTIMALKAN: Ditambahkan props 'productId' untuk mendeteksi Mode Edit secara dinamis
+function JualBarang({ productId, user, isAuthenticated, onNavigate, onListingCreated }) {
   const [form, setForm] = useState(INITIAL_FORM)
   const [images, setImages] = useState([])
   const [previewUrls, setPreviewUrls] = useState([])
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [loadingData, setLoadingData] = useState(false)
+
+  // Menentukan status mode halaman saat ini
+  const isEditMode = !!productId
+
+  // 🌟 BARU: Jika dalam Mode Edit, tarik data lama dari Supabase Cloud saat halaman dibuka
+  useEffect(() => {
+    async function loadListingToEdit() {
+      if (!productId || !user?.id) return
+      setLoadingData(true)
+      try {
+        const { data, error: fetchError } = await supabase
+          .from('listings')
+          .select('*')
+          .eq('id', productId)
+          .single()
+
+        if (fetchError) throw fetchError
+
+        // VALIDASI PROTEKSI: Cegah user lain mengedit barang lewat modifikasi URL parameter
+        if (data && data.seller_id !== user.id) {
+          alert('Akses Ditolak! Anda bukan pemilik sah dari iklan gawai ini.')
+          onNavigate('shop')
+          return
+        }
+
+        if (data) {
+          setForm({
+            name: data.name || '',
+            description: data.description || '',
+            category: data.category || 'laptop',
+            badge: data.badge || 'BEKAS',
+            score: data.score || '85%',
+            priceValue: data.price_value ? data.price_value.toString() : '',
+            oldPriceValue: data.old_price_value ? data.old_price_value.toString() : '',
+            stock: data.stock ? data.stock.toString() : '1',
+            location: data.location || '',
+            tech_spec: data.tech_spec || ''
+          })
+          
+          if (data.image_url) {
+            setPreviewUrls([data.image_url])
+            setImages([data.image_url]) // Simpan data gambar lama sebagai fallback
+          }
+        }
+      } catch (err) {
+        console.error('Gagal memuat data spesifikasi lama:', err.message)
+        setError('Gagal mengunduh informasi spesifikasi produk dari server cloud.')
+      } finally {
+        setLoadingData(false)
+      }
+    }
+
+    if (isEditMode) {
+      loadListingToEdit()
+    } else {
+      setForm(INITIAL_FORM)
+      setPreviewUrls([])
+      setImages([])
+    }
+  }, [productId, isEditMode, user])
 
   function updateField(event) {
     const { name, value } = event.target
@@ -54,27 +117,19 @@ function JualBarang({ user, isAuthenticated, onNavigate, onListingCreated }) {
     setPreviewUrls((current) => current.filter((_, i) => i !== index))
   }
 
-  // INTEGRASI SUBMIT FORM LANGSUNG KE SUPABASE CLOUD DATABASE
+  // LOGIKA SUBMIT DINAMIS: BISA INSERT (BARANG BARU) ATAUPUN UPDATE (BARANG LAMA)
   async function handleSubmit(event) {
     event.preventDefault()
     setError('')
     setSuccess('')
 
-    // --- Validasi Bawaan Frontend ---
-    if (!form.name.trim()) {
-      setError('Nama produk wajib diisi.')
-      return
-    }
-    if (!form.description.trim()) {
-      setError('Deskripsi wajib diisi.')
-      return
-    }
-    if (!form.location.trim()) {
-      setError('Lokasi penjual wajib diisi.')
+    // --- Validasi Input Standar ---
+    if (!form.name.trim() || !form.description.trim() || !form.location.trim()) {
+      setError('Mohon lengkapi seluruh kolom wajib di atas.')
       return
     }
     if (images.length === 0) {
-      setError('Unggah minimal satu foto produk.')
+      setError('Unggah minimal satu foto pratinjau gawai Anda.')
       return
     }
 
@@ -87,47 +142,58 @@ function JualBarang({ user, isAuthenticated, onNavigate, onListingCreated }) {
     setIsSubmitting(true)
 
     try {
-      // 1. Pastikan ID pengguna aktif tersedia melalui props user
-      if (!user?.id) {
-        throw new Error('Sesi masuk tidak valid. Silakan masuk kembali.')
+      if (!user?.id) throw new Error('Sesi masuk kedaluwarsa. Silakan login ulang.')
+
+      // Objek data yang akan dikirim ke PostgreSQL Supabase
+      const payload = {
+        seller_id: user.id,
+        name: form.name.trim(),
+        description: form.description.trim(),
+        category: form.category,
+        badge: form.badge,
+        score: form.score,
+        price_value: priceValue,
+        old_price_value: form.oldPriceValue ? Number(form.oldPriceValue) : null,
+        stock: parseInt(form.stock) || 1,
+        location: form.location.trim(),
+        image_url: images[0] || null,
+        tech_spec: form.tech_spec.trim()
       }
 
-      // 2. Simpan data masukan langsung ke PostgreSQL Supabase
-      const { data: newListing, error: insertError } = await supabase
-        .from('listings')
-        .insert([
-          {
-            seller_id: user.id, // Relasi dengan tabel profiles akun penjual
-            name: form.name,
-            description: form.description,
-            category: form.category,
-            badge: form.badge,
-            score: form.score,
-            price_value: priceValue,
-            old_price_value: form.oldPriceValue ? Number(form.oldPriceValue) : null,
-            stock: parseInt(form.stock),
-            location: form.location,
-            image_url: images[0] || null // Simpan representasi gambar pertama ke kolom image_url
-          }
-        ])
-        .select()
-        .single()
+      let currentListingId = productId
 
-      if (insertError) throw insertError
+      if (isEditMode) {
+        // 🌟 AKSI MODE EDIT: Melakukan query UPDATE di PostgreSQL cloud
+        const { error: updateError } = await supabase
+          .from('listings')
+          .update(payload)
+          .eq('id', productId)
+          .eq('seller_id', user.id) // Kunci keamanan berlapis di sisi backend
 
-      // Pemicu pembaruan state versi katalog produk di App.jsx
-      onListingCreated?.(newListing.id)
+        if (updateError) throw updateError
+        setSuccess('Spesifikasi gawai Anda berhasil diperbarui di server cloud REVIVO!')
+      } else {
+        // 🌟 AKSI MODE TAMBAH: Melakukan query INSERT data barang baru
+        const { data: newListing, error: insertError } = await supabase
+          .from('listings')
+          .insert([{ ...payload, status: 'available' }])
+          .select()
+          .single()
 
-      setSuccess('Produk berhasil dipasang! Mengalihkan ke halaman produk...')
-      setForm(INITIAL_FORM)
-      setImages([])
-      setPreviewUrls([])
+        if (insertError) throw insertError
+        currentListingId = newListing.id
+        setSuccess('Produk gawai baru berhasil diterbitkan ke toko!')
+      }
+
+      // Memicu trigger refresh state katalog utama di App.jsx
+      onListingCreated?.(currentListingId)
 
       window.setTimeout(() => {
-        onNavigate('product-detail', { productId: newListing.id })
+        onNavigate('product-detail', { productId: currentListingId })
       }, 900)
+
     } catch (submitError) {
-      setError(submitError.message || 'Gagal menyimpan produk ke basis data cloud.')
+      setError(submitError.message || 'Gagal menyelaraskan transaksi data dengan cloud.')
     } finally {
       setIsSubmitting(false)
     }
@@ -138,15 +204,20 @@ function JualBarang({ user, isAuthenticated, onNavigate, onListingCreated }) {
       <StoreLayout isAuthenticated={false} onNavigate={onNavigate} showPromo={false}>
         <div className="jual-page">
           <div className="store-message jual-gate">
-            <h1>Jual Barang di Revivo</h1>
-            <p>Masuk dulu untuk mengunggah produk bekas atau refurbish kamu.</p>
-            <button type="button" className="button button--orange" onClick={() => onNavigate('login')}>
-              MASUK SEKARANG
-            </button>
-            <button type="button" className="button button--outline" onClick={() => onNavigate('signup')}>
-              DAFTAR AKUN
-            </button>
+            <h1>Akses Terbatas</h1>
+            <p>Silakan masuk ke akun Revivo Anda untuk mengelola etalase toko.</p>
+            <button type="button" className="button button--orange" onClick={() => onNavigate('login')}>MASUK SEKARANG</button>
           </div>
+        </div>
+      </StoreLayout>
+    )
+  }
+
+  if (loadingData) {
+    return (
+      <StoreLayout isAuthenticated onNavigate={onNavigate} showPromo={false}>
+        <div className="jual-page">
+          <p className="shop-empty">Mendekripsi riwayat spesifikasi perangkat dari cloud...</p>
         </div>
       </StoreLayout>
     )
@@ -156,27 +227,24 @@ function JualBarang({ user, isAuthenticated, onNavigate, onListingCreated }) {
     <StoreLayout isAuthenticated onNavigate={onNavigate} showPromo={false}>
       <div className="jual-page">
         <header className="jual-page__header">
-          <h1>JUAL BARANG</h1>
+          {/* Judul adaptif mengikuti status mode halaman */}
+          <h1>{isEditMode ? 'PERBARUI DETAIL GAWAI' : 'JUAL BARANG'}</h1>
           <p>
-            Halo, <strong>{user?.username || 'Pengguna'}</strong>! Silahkan isi detail produk dan foto. Listing langsung muncul di
-            toko Revivo.
+            {isEditMode 
+              ? 'Ubah rincian spesifikasi teknis, sesuaikan harga, atau perbarui sisa kuantitas stok barang Anda.' 
+              : `Halo, ${user?.username || 'Pengguna'}! Silahkan isi detail gawai baru Anda untuk diterbitkan ke katalog toko.`
+            }
           </p>
         </header>
 
         <form className="jual-form" onSubmit={handleSubmit}>
+          {/* SECTION FOTO */}
           <section className="jual-form__section">
             <h2>Foto Produk</h2>
-            <p className="jual-form__hint">Maks. 4 foto, format JPG/PNG, maks. 2,5 MB per file.</p>
-
+            <p className="jual-form__hint">Format JPG/PNG, maks. 2,5 MB per file.</p>
             <label className="jual-upload">
-              <input
-                type="file"
-                accept="image/*"
-                multiple
-                onChange={handlePhotos}
-                aria-label="Unggah foto produk"
-              />
-              <span>Pilih foto dari perangkat</span>
+              <input type="file" accept="image/*" multiple onChange={handlePhotos} aria-label="Unggah foto produk" />
+              <span>Pilih foto gawai baru</span>
             </label>
 
             {previewUrls.length > 0 && (
@@ -184,39 +252,24 @@ function JualBarang({ user, isAuthenticated, onNavigate, onListingCreated }) {
                 {previewUrls.map((src, index) => (
                   <figure key={src}>
                     <img src={src} alt={`Pratinjau ${index + 1}`} />
-                    <button type="button" onClick={() => removePhoto(index)}>
-                      Hapus
-                    </button>
+                    <button type="button" onClick={() => removePhoto(index)}>Hapus</button>
                   </figure>
                 ))}
               </div>
             )}
           </section>
 
+          {/* SECTION INFORMASI UTAMA */}
           <section className="jual-form__section">
             <h2>Informasi Produk</h2>
-
             <label className="jual-field">
               <span>Nama produk</span>
-              <input
-                name="name"
-                value={form.name}
-                onChange={updateField}
-                placeholder="Contoh: ThinkPad T14 Bekas — Siap Kerja"
-                required
-              />
+              <input name="name" value={form.name} onChange={updateField} placeholder="Contoh: ThinkPad T14 Bekas — Siap Kerja" required />
             </label>
 
             <label className="jual-field">
               <span>Deskripsi</span>
-              <textarea
-                name="description"
-                value={form.description}
-                onChange={updateField}
-                rows={4}
-                placeholder="Ceritakan kondisi, minus, dan kelengkapan barang..."
-                required
-              />
+              <textarea name="description" value={form.description} onChange={updateField} rows={4} placeholder="Ceritakan kondisi, minus, dan kelengkapan barang..." required />
             </label>
 
             <div className="jual-field-row">
@@ -224,9 +277,7 @@ function JualBarang({ user, isAuthenticated, onNavigate, onListingCreated }) {
                 <span>Kategori</span>
                 <select name="category" value={form.category} onChange={updateField}>
                   {listingFormCategories.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.label}
-                    </option>
+                    <option key={item.id} value={item.id}>{item.label}</option>
                   ))}
                 </select>
               </label>
@@ -235,9 +286,7 @@ function JualBarang({ user, isAuthenticated, onNavigate, onListingCreated }) {
                 <span>Kondisi</span>
                 <select name="badge" value={form.badge} onChange={updateField}>
                   {BADGE_OPTIONS.map((badge) => (
-                    <option key={badge} value={badge}>
-                      {badge}
-                    </option>
+                    <option key={badge} value={badge}>{badge}</option>
                   ))}
                 </select>
               </label>
@@ -246,88 +295,52 @@ function JualBarang({ user, isAuthenticated, onNavigate, onListingCreated }) {
                 <span>Skor kondisi</span>
                 <select name="score" value={form.score} onChange={updateField}>
                   {SCORE_OPTIONS.map((score) => (
-                    <option key={score} value={score}>
-                      {score}
-                    </option>
+                    <option key={score} value={score}>{score}</option>
                   ))}
                 </select>
               </label>
             </div>
+
+            <label className="jual-field" style={{ marginTop: '20px', borderTop: '1px solid #eee', paddingTop: '15px' }}>
+              <span>Spesifikasi Teknis Tambahan (Opsional)</span>
+              <textarea name="tech_spec" value={form.tech_spec} onChange={updateField} rows={4} placeholder="Masukkan rincian komponen hardware gawai secara bebas." />
+            </label>
           </section>
 
+          {/* SECTION HARGA & STOK */}
           <section className="jual-form__section">
             <h2>Harga & Stok</h2>
-
             <div className="jual-field-row">
               <label className="jual-field">
                 <span>Harga jual (Rp)</span>
-                <input
-                  type="number"
-                  name="priceValue"
-                  min="1000"
-                  step="1000"
-                  value={form.priceValue}
-                  onChange={updateField}
-                  placeholder="5320000"
-                  required
-                />
+                <input type="number" name="priceValue" min="1000" step="1" value={form.priceValue} onChange={updateField} placeholder="5320000" required />
               </label>
 
               <label className="jual-field">
                 <span>Harga coret (Rp)</span>
-                <input
-                  type="number"
-                  name="oldPriceValue"
-                  min="1000"
-                  step="1000"
-                  value={form.oldPriceValue}
-                  onChange={updateField}
-                  placeholder="5999999"
-                />
+                <input type="number" name="oldPriceValue" min="1000" step="1" value={form.oldPriceValue} onChange={updateField} placeholder="5999999" />
               </label>
 
               <label className="jual-field">
                 <span>Stok (unit)</span>
-                <input
-                  type="number"
-                  name="stock"
-                  min="1"
-                  max="99"
-                  value={form.stock}
-                  onChange={updateField}
-                  required
-                />
+                <input type="number" name="stock" min="1" max="99" value={form.stock} onChange={updateField} required />
               </label>
             </div>
 
             <label className="jual-field">
               <span>Lokasi penjual</span>
-              <input
-                name="location"
-                value={form.location}
-                onChange={updateField}
-                placeholder="Contoh: Jakarta Selatan, DKI Jakarta"
-                required
-              />
+              <input name="location" value={form.location} onChange={updateField} placeholder="Contoh: Jakarta Selatan, DKI Jakarta" required />
             </label>
           </section>
 
-          {error && (
-            <p className="jual-form__error" role="alert">
-              {error}
-            </p>
-          )}
-          {success && (
-            <p className="jual-form__success" role="status">
-              {success}
-            </p>
-          )}
+          {error && <p className="jual-form__error" role="alert">{error}</p>}
+          {success && <p className="jual-form__success" role="status">{success}</p>}
 
           <div className="jual-form__actions">
             <button type="submit" className="button button--orange" disabled={isSubmitting}>
-              {isSubmitting ? 'MENYIMPAN...' : 'PASANG PRODUK'}
+              {isSubmitting ? 'MENYIMPAN...' : isEditMode ? 'SIMPAN PERUBAHAN' : 'PASANG PRODUK'}
             </button>
-            <button type="button" className="button button--outline" onClick={() => onNavigate('shop')}>
+            <button type="button" className="button button--outline" onClick={() => onNavigate(isEditMode ? 'product-detail' : 'shop', { productId })}>
               BATAL
             </button>
           </div>

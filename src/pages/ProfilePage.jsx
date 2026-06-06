@@ -38,49 +38,147 @@ function ProfileIcon({ type }) {
   )
 }
 
-function ProfileProductCard({ product, onSelect }) {
-  const Tag = onSelect ? 'button' : 'article'
-  const tagProps = onSelect
-    ? {
-        type: 'button',
-        className: 'dashboard-product-card dashboard-product-card--clickable',
-        onClick: () => onSelect(product.id),
-      }
-    : { className: 'dashboard-product-card' }
+// Panel Kontrol Sembunyikan & Hapus Produk
+function ProfileProductCard({ product, onSelect, onEdit, onToggleHide, onDelete, isOwner }) {
+  const isHidden = product.status === 'hidden' || product.status === 'archived'
 
   return (
-    <Tag {...tagProps}>
-      <div className="dashboard-product-card__media">
-        <img src={product.image} alt={product.name} />
-        <span className="score-badge">{product.score}</span>
-        <span className="status-badge">{product.badge}</span>
-      </div>
-      <h3>{product.name}</h3>
-      <div className="product-card__price">
-        <strong>{product.price}</strong>
-        {product.oldPrice && <span>{product.oldPrice}</span>}
-      </div>
-    </Tag>
+    <article 
+      className="dashboard-product-card" 
+      style={{ 
+        display: 'flex', 
+        flexDirection: 'column', 
+        justifyContent: 'space-between',
+        height: '100%',
+        boxSizing: 'border-box',
+        overflow: 'hidden',
+        opacity: isHidden ? 0.6 : 1, 
+        border: isHidden ? '1px dashed #ccc' : '1px solid #e2e8f0'
+      }}
+    >
+      <button 
+        type="button" 
+        className="dashboard-product-card--clickable-area" 
+        onClick={() => onSelect(product.id)}
+        style={{ 
+          background: 'none', 
+          border: 'none', 
+          padding: 0, 
+          textAlign: 'left', 
+          width: '100%', 
+          cursor: 'pointer',
+          display: 'flex',
+          flexDirection: 'column'
+        }}
+      >
+        <div className="dashboard-product-card__media">
+          <img src={product.image} alt={product.name} style={{ width: '100%', objectFit: 'cover' }} />
+          <span className="score-badge">{product.score}</span>
+          <span className="status-badge" style={{ background: isHidden ? '#718096' : '#ff7f00' }}>
+            {isHidden ? 'TERSEMBUNYI' : product.badge}
+          </span>
+        </div>
+        
+        <h3 style={{ 
+          fontSize: '1rem', 
+          margin: '10px 0 6px 0', 
+          whiteSpace: 'nowrap', 
+          overflow: 'hidden', 
+          textOverflow: 'ellipsis',
+          width: '100%'
+        }}>
+          {product.name}
+        </h3>
+
+        <div className="product-card__price" style={{ 
+          display: 'flex', 
+          flexWrap: 'wrap', 
+          alignItems: 'baseline', 
+          gap: '4px 8px', 
+          margin: '0 0 12px 0',
+          width: '100%',
+          overflow: 'hidden'
+        }}>
+          <strong style={{ fontSize: '1.05rem', color: '#0d3b66', whiteSpace: 'nowrap' }}>
+            {product.price}
+          </strong>
+          {product.oldPrice && (
+            <span style={{ color: '#999', textDecoration: 'line-through', fontSize: '0.8rem', whiteSpace: 'nowrap' }}>
+              {product.oldPrice}
+            </span>
+          )}
+        </div>
+      </button>
+
+      {/* KONTROL BARIS UTAMA UNTUK PENJUAL */}
+      {isOwner && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', width: '100%', marginTop: 'auto' }}>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onEdit(product.id); }}
+            style={{ width: '100%', background: '#fff', color: '#ff7f00', border: '1px solid #ff7f00', padding: '6px 0', borderRadius: '4px', fontWeight: 'bold', fontSize: '0.8rem', cursor: 'pointer' }}
+          >
+            📝 Edit Gawai
+          </button>
+          
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onToggleHide(product.id, isHidden); }}
+              style={{ background: isHidden ? '#2b6cb0' : '#4a5568', color: '#fff', border: '0', padding: '6px 0', borderRadius: '4px', fontWeight: '500', fontSize: '0.75rem', cursor: 'pointer' }}
+            >
+              {isHidden ? '👁️ Tampilkan' : '🚫 Sembunyikan'}
+            </button>
+
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onDelete(product.id, product.name); }}
+              style={{ background: '#e53e3e', color: '#fff', border: '0', padding: '6px 0', borderRadius: '4px', fontWeight: '500', fontSize: '0.75rem', cursor: 'pointer' }}
+            >
+              🗑️ Hapus
+            </button>
+          </div>
+        </div>
+      )}
+    </article>
   )
 }
 
 function ProfilePage({ user, onNavigate, onLogout, listingsVersion = 0 }) {
-  // State manajemen data personal dari server cloud
   const [userProducts, setUserProducts] = useState([])
   const [totalOrders, setTotalOrders] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [refreshTrigger, setRefreshTrigger] = useState(0) 
+  
+  const [cloudProfile, setCloudProfile] = useState({
+    username: 'wongjowo',
+    full_name: 'Wong Jowo Asli',
+    address: 'Jl. Pahlawan No. 10, Kota Semarang, Jawa Tengah, 50131, Indonesia'
+  })
 
-  const displayName = user?.username || 'Pengguna Revivo'
-  const firstName = displayName.split(' ')[0] || displayName
-  const email = user?.email || 'pembeli@revivo.com'
+  const displayName = cloudProfile.full_name || user?.username || 'wongjowo'
+  const firstName = cloudProfile.username || user?.username || 'wongjowo'
+  const email = user?.email || 'cumacobadoang527@gmail.com'
 
-  // TARIK DATA SPESIFIK PENGGUNA BERDASARKAN USER ID AUTENTIKASI
   useEffect(() => {
     async function loadUserDashboardData() {
       if (!user?.id) return
       setLoading(true)
       try {
-        // 1. Ambil list produk yang dijual oleh akun ini sendiri (Filter berdasarkan seller_id)
+        const { data: profData } = await supabase
+          .from('profiles')
+          .select('username, full_name, address')
+          .eq('id', user.id)
+          .maybeSingle()
+          
+        if (profData) {
+          setCloudProfile({
+            username: profData.username || 'wongjowo',
+            full_name: profData.full_name || 'Wong Jowo Asli',
+            address: profData.address || 'Jl. Pahlawan No. 10, Kota Semarang, Jawa Tengah, 50131, Indonesia'
+          })
+        }
+
         const { data: listingsData, error: listingsError } = await supabase
           .from('listings')
           .select('*')
@@ -95,12 +193,13 @@ function ProfilePage({ user, onNavigate, onLogout, listingsVersion = 0 }) {
             oldPrice: item.old_price_value ? `Rp ${Number(item.old_price_value).toLocaleString('id-ID')}` : '',
             badge: item.badge,
             score: item.score,
-            image: item.image_url || '/placeholder.svg'
+            image: item.image_url || '/placeholder.svg',
+            seller_id: item.seller_id,
+            status: item.status 
           }))
           setUserProducts(formatted)
         }
 
-        // 2. Hitung statistik total pesanan belanja milik user ini di tabel orders
         const { count, error: ordersError } = await supabase
           .from('orders')
           .select('*', { count: 'exact', head: true })
@@ -118,18 +217,59 @@ function ProfilePage({ user, onNavigate, onLogout, listingsVersion = 0 }) {
     }
 
     loadUserDashboardData()
-  }, [user, listingsVersion])
+  }, [user, listingsVersion, refreshTrigger])
+
+  async function handleToggleHideProduct(id, currentHiddenStatus) {
+    try {
+      const nextStatus = currentHiddenStatus ? 'available' : 'hidden'
+      const { error } = await supabase
+        .from('listings')
+        .update({ status: nextStatus })
+        .eq('id', id)
+        .eq('seller_id', user.id)
+
+      if (error) throw error
+      setRefreshTrigger(prev => prev + 1) 
+    } catch (err) {
+      alert('Gagal mengubah status visibilitas: ' + err.message)
+    }
+  }
+
+  async function handleDeleteProduct(id, name) {
+    const confirmDelete = window.confirm(`Apakah Anda yakin ingin menghapus permanen iklan "${name}" dari cloud database Revivo?`)
+    if (!confirmDelete) return
+
+    try {
+      const { error } = await supabase
+        .from('listings')
+        .delete()
+        .eq('id', id)
+        .eq('seller_id', user.id) 
+
+      if (error) throw error
+      alert('Iklan gawai berhasil dihapus selamanya.')
+      setRefreshTrigger(prev => prev + 1)
+    } catch (err) {
+      alert('Gagal menghapus produk: ' + err.message)
+    }
+  }
 
   function handleMenuClick(item) {
     if (item.action === 'logout') {
       onLogout()
       return
     }
-    if (item.icon === 'cart') {
-      onNavigate('cart')
-    }
-    if (item.label === 'Jual Produk') {
-      onNavigate('jual-barang')
+    
+    switch (item.label) {
+      case 'DASBOR': onNavigate('profile'); break
+      case 'Lacak Pesanan': onNavigate('lacak-pesanan'); break
+      case 'Keranjang Belanja': onNavigate('cart'); break
+      case 'Jual Produk': onNavigate('jual-barang'); break
+      case 'Daftar Keinginan': onNavigate('wishlist'); break
+      case 'Bandingkan': onNavigate('bandingkan'); break
+      case 'Kartu & Alamat': onNavigate('kartu-alamat'); break
+      case 'Pengaturan': onNavigate('pengaturan'); break
+      default: break
     }
   }
 
@@ -164,11 +304,7 @@ function ProfilePage({ user, onNavigate, onLogout, listingsVersion = 0 }) {
                     <img src={user.avatar} alt={displayName} />
                   ) : (
                     <span aria-hidden="true">
-                      {displayName
-                        .split(' ')
-                        .map((part) => part[0])
-                        .join('')
-                        .slice(0, 2)}
+                      {displayName.split(' ').map((part) => part[0]).join('').slice(0, 2)}
                     </span>
                   )}
                 </div>
@@ -179,7 +315,7 @@ function ProfilePage({ user, onNavigate, onLogout, listingsVersion = 0 }) {
                 <p>Email Utama: {email}</p>
                 <p>Status Keamanan: Terverifikasi SSL</p>
                 <p>Enkripsi: Supabase Row Level Security</p>
-                <button type="button">EDIT AKUN</button>
+                <button type="button" onClick={() => onNavigate('edit-akun')}>EDIT AKUN</button>
               </div>
             </article>
 
@@ -187,27 +323,21 @@ function ProfilePage({ user, onNavigate, onLogout, listingsVersion = 0 }) {
               <h2>ALAMAT UTAMA</h2>
               <div className="dashboard-card__content">
                 <p>{displayName}</p>
-                <p>Jl. Pahlawan No. 10, Kota Semarang, Jawa Tengah, 50131, Indonesia</p>
+                <p>{cloudProfile.address}</p>
                 <p>Zona Waktu: WIB</p>
                 <p>Email Kontak: {email}</p>
-                <button type="button">EDIT ALAMAT</button>
+                <button type="button" onClick={() => onNavigate('kartu-alamat')}>EDIT ALAMAT</button>
               </div>
             </article>
 
             <div className="dashboard-stats">
               <article>
-                <div>
-                  <ProfileIcon type="rocket" />
-                </div>
-                {/* Menampilkan total pesanan real hasil query count tabel orders */}
+                <div><ProfileIcon type="rocket" /></div>
                 <strong>{totalOrders}</strong>
                 <span>Total Pesanan</span>
               </article>
               <article>
-                <div>
-                  <ProfileIcon type="box" />
-                </div>
-                {/* Menampilkan jumlah ril listing yang diupload user */}
+                <div><ProfileIcon type="box" /></div>
                 <strong>{userProducts.length}</strong>
                 <span>Total Penjualan</span>
               </article>
@@ -227,6 +357,10 @@ function ProfilePage({ user, onNavigate, onLogout, listingsVersion = 0 }) {
                     key={product.id}
                     product={product}
                     onSelect={(id) => onNavigate('product-detail', { productId: id })}
+                    onEdit={(id) => onNavigate('edit-barang', { productId: id })}
+                    onToggleHide={handleToggleHideProduct}
+                    onDelete={handleDeleteProduct}
+                    isOwner={user?.id === product.seller_id}
                   />
                 ))}
               </div>
@@ -235,32 +369,83 @@ function ProfilePage({ user, onNavigate, onLogout, listingsVersion = 0 }) {
         </div>
       </section>
 
-      <footer className="site-footer">
-        <div className="site-footer__top">
-          <div className="footer-brand">
-            <img src={logoRevivo} alt="Revivo" />
-            <p>Marketplace elektronik bekas terpercaya dengan garansi kualitas dan harga terbaik.</p>
+      {/* 🌟 PERBAIKAN FOOTER: Mengaktifkan Tautan Menu Informasi Startup REVIVO */}
+      <footer className="site-footer" style={{ marginTop: '50px', borderTop: '1px solid #e2e8f0', paddingTop: '40px' }}>
+        <div className="site-footer__top" style={{ display: 'flex', justifyContent: 'space-between', gap: '30px', flexWrap: 'wrap', marginBottom: '30px' }}>
+          <div className="footer-brand" style={{ flex: '1', minWidth: '250px' }}>
+            <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#ff7f00', marginBottom: '10px' }}>REVIVO</h2>
+            <p style={{ color: '#cbd5e1', fontSize: '0.95rem', lineHeight: '1.5' }}>
+              Marketplace elektronik bekas terpercaya dengan garansi kualitas dan harga terbaik.
+            </p>
           </div>
 
-          {footerGroups.map((group) => (
-            <div className="footer-links" key={group.title}>
-              <h3>{group.title}</h3>
-              {group.links.map((link) => (
-                <a href="#footer" key={link}>
-                  {link}
-                </a>
-              ))}
+          {footerGroups && footerGroups.map((group) => (
+            <div className="footer-links" key={group.title} style={{ display: 'flex', flexDirection: 'column', gap: '8px', minWidth: '150px' }}>
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 'bold', color: '#fff', marginBottom: '5px' }}>{group.title}</h3>
+              {group.links.map((link) => {
+                let tabKey = 'tentang-kami'
+                if (link === 'Cara Kerja') tabKey = 'cara-kerja'
+                if (link === 'Syarat & Ketentuan') tabKey = 'syarat-ketentuan'
+                if (link === 'Kebijakan Privasi') tabKey = 'kebijakan-privasi'
+                if (link === 'Lacak Pesanan') tabKey = 'lacak-pesanan'
+                
+                const targetPage = link === 'Lacak Pesanan' ? 'lacak-pesanan' : 'footer-content'
+
+                return (
+                  <button
+                    key={link}
+                    type="button"
+                    onClick={() => onNavigate(targetPage, { footerTab: tabKey })}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#cbd5e1',
+                      padding: '2px 0',
+                      textAlign: 'left',
+                      font: 'inherit',
+                      cursor: 'pointer',
+                      display: 'block',
+                      fontSize: '0.9rem',
+                      transition: 'color 0.2s ease'
+                    }}
+                    onMouseOver={(e) => e.currentTarget.style.color = '#ff7f00'}
+                    onMouseOut={(e) => e.currentTarget.style.color = '#cbd5e1'}
+                  >
+                    {link}
+                  </button>
+                )
+              })}
             </div>
           ))}
         </div>
 
-        <div className="site-footer__bottom">
-          <p>(c) 2026 Revivo. Hak Cipta Dilindungi.</p>
-          <div className="payment-list">
-            <strong>Metode Pembayaran:</strong>
-            {paymentMethods.map((method) => (
-              <span key={method}>{method}</span>
-            ))}
+        <div className="site-footer__bottom" style={{ borderTop: '1px solid #334155', paddingTop: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '15px' }}>
+          <p style={{ color: '#94a3b8', fontSize: '0.85rem' }}>(c) 2026 Revivo. Hak Cipta Dilindungi.</p>
+          <div className="payment-list" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <strong style={{ color: '#fff', fontSize: '0.9rem' }}>Metode Pembayaran:</strong>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              {paymentMethods && paymentMethods.map((method) => (
+                <span 
+                  key={method}
+                  style={{
+                    background: '#fff',
+                    color: '#0f172a',
+                    padding: '4px 12px',
+                    borderRadius: '4px',
+                    fontSize: '0.75rem',
+                    fontWeight: 'bold',
+                    textTransform: 'uppercase',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    minWidth: '60px',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+                  }}
+                >
+                  {method}
+                </span>
+              ))}
+            </div>
           </div>
         </div>
       </footer>

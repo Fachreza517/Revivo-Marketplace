@@ -9,6 +9,18 @@ import ProductDetail from './pages/ProductDetail.jsx'
 import ProfilePage from './pages/ProfilePage.jsx'
 import JualBarang from './pages/JualBarang.jsx'
 import Shop from './pages/Shop.jsx'
+
+// Import modul utama halaman baru dashboard profil
+import LacakPesanan from './pages/LacakPesanan.jsx'
+import Wishlist from './pages/Wishlist.jsx'
+import Bandingkan from './pages/Bandingkan.jsx'
+import KartuAlamat from './pages/KartuAlamat.jsx'
+import Pengaturan from './pages/Pengaturan.jsx'
+import EditAkun from './pages/EditAkun.jsx'
+
+// 🌟 BARU: Import Halaman Dinamis Konten Footer Startup REVIVO
+import FooterContentPage from './pages/FooterContentPage.jsx'
+
 // Import jembatan Supabase yang baru kamu buat di folder integrations
 import { supabase } from './integrations/supabase/client.js'
 
@@ -22,6 +34,9 @@ function App() {
   const [listingsVersion, setListingsVersion] = useState(0)
   const [authUser, setAuthUser] = useState(null)
   const [message, setMessage] = useState('')
+
+  // 🌟 BARU: State Pengendali Navigasi Konten Footer Khusus
+  const [footerTab, setFooterTab] = useState('tentang-kami')
 
   // 1. PANTAU STATUS LOGIN SECARA LIVE DARI CLOUD SUPABASE
   useEffect(() => {
@@ -73,6 +88,11 @@ function App() {
       setActiveChatThreadId(options.threadId)
     }
 
+    // 🌟 BARU: Rekam payload menu footer mana yang sedang di-klik oleh pengguna
+    if (options.footerTab) {
+      setFooterTab(options.footerTab)
+    }
+
     if (options.chatBootstrap) {
       setChatBootstrap(options.chatBootstrap)
     } else if (nextPage !== 'chat') {
@@ -95,7 +115,7 @@ function App() {
       return
     }
 
-    if (!/^[A-Za-z0-9]+(?: [A-Za-z0-9]+)*$/.test(username)) {
+    if (!/^[A-Za-z0-9]+( [A-Za-z0-9]+)*$/.test(username)) {
       setMessage('Nama pengguna boleh memakai spasi, contohnya Damon Albarn.')
       return
     }
@@ -202,11 +222,26 @@ function App() {
         onListingCreated={() => setListingsVersion((version) => version + 1)}
       />
     )
-  } else if (page === 'product-detail') {
+  } 
+  // PERBAIKAN 1: MENAMBAHKAN ROUTE EDIT BARANG MENGGUNAKAN ULANG KOMPONEN JUALBARANG
+  else if (page === 'edit-barang') {
+    content = (
+      <JualBarang
+        productId={selectedProductId} // Mengoper ID barang dinamis yang ditangkap state pusat
+        user={authUser}
+        isAuthenticated={isAuthenticated}
+        onNavigate={navigate}
+        onListingCreated={() => setListingsVersion((version) => version + 1)}
+      />
+    )
+  } 
+  else if (page === 'product-detail') {
     content = (
       <ProductDetail
         productId={selectedProductId}
         isAuthenticated={isAuthenticated}
+        // PERBAIKAN 2: Alirkan data authUser aktif agar tombol edit di halaman detail produk mengenali pemiliknya
+        user={authUser} 
         onNavigate={navigate}
       />
     )
@@ -225,7 +260,33 @@ function App() {
     )
   } else if (page === 'checkout') {
     content = <Checkout isAuthenticated={isAuthenticated} onNavigate={navigate} />
-  } else {
+  } 
+  // 🌟 BARU: ROUTE DINAMIS UNTUK HALAMAN INFORMASI KONTEN FOOTER STARTUP
+  else if (page === 'footer-content') {
+    content = (
+      <FooterContentPage 
+        contentType={footerTab}
+        isAuthenticated={isAuthenticated}
+        onNavigate={navigate}
+      />
+    )
+  }
+  // 5. PENAMBAHAN ROUTING KONDISIONAL HALAMAN BARU DASHBOARD PROFIL
+  else if (page === 'lacak-pesanan') {
+    content = <LacakPesanan isAuthenticated={isAuthenticated} onNavigate={navigate} />
+  } else if (page === 'wishlist') {
+    content = <Wishlist isAuthenticated={isAuthenticated} onNavigate={navigate} />
+  } else if (page === 'bandingkan') {
+    content = <Bandingkan isAuthenticated={isAuthenticated} onNavigate={navigate} />
+  } else if (page === 'kartu-alamat') {
+    content = <KartuAlamat isAuthenticated={isAuthenticated} onNavigate={navigate} />
+  } else if (page === 'pengaturan') {
+    content = <Pengaturan isAuthenticated={isAuthenticated} onNavigate={navigate} />
+  } else if (page === 'edit-akun') {
+    content = <EditAkun isAuthenticated={isAuthenticated} onNavigate={navigate} />
+  } 
+  // -------------------------------------------------------------
+  else {
     content = (
       <Landing
         isAuthenticated={isAuthenticated}

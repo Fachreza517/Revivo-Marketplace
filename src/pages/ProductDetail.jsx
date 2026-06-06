@@ -5,24 +5,24 @@ import { useCart } from '../context/CartContext.jsx'
 // Import jembatan Supabase Client
 import { supabase } from '../integrations/supabase/client.js'
 
-function ProductDetail({ productId, isAuthenticated, onNavigate }) {
+function ProductDetail({ productId, isAuthenticated, user, onNavigate }) {
   const { addItem } = useCart()
   
   const [product, setProduct] = useState(null)
   const [loading, setLoading] = useState(true)
   
-  // State manajemen ulasan dari basis data Supabase
   const [reviews, setReviews] = useState([])
   const [ratingInput, setRatingInput] = useState(5)
   const [commentInput, setCommentInput] = useState('')
   const [reviewName, setReviewName] = useState('')
   const [submittingReview, setSubmittingReview] = useState(false)
 
-  // FUNGSI UTAMA UNTUK MENARIK DATA PRODUK & LIST REVIEWS SECARA BERSAMAAN
+  const [isWishlisted, setIsWishlisted] = useState(false)
+  const [togglingWishlist, setTogglingWishlist] = useState(false)
+
   const fetchProductAndReviews = async () => {
     if (!productId) return
     try {
-      // 1. Ambil spesifikasi detail produk dari tabel listings
       const { data: prodData, error: prodError } = await supabase
         .from('listings')
         .select('*')
@@ -32,7 +32,7 @@ function ProductDetail({ productId, isAuthenticated, onNavigate }) {
       if (prodError) throw prodError
 
       if (prodData) {
-        const fallbackStoreName = `Toko Revivo ${prodData.location.split(',')[0] || 'Gawai'}`
+        const fallbackStoreName = `Toko Revivo ${prodData.location?.split(',')[0] || 'Gawai'}`
         
         setProduct({
           id: prodData.id,
@@ -50,9 +50,11 @@ function ProductDetail({ productId, isAuthenticated, onNavigate }) {
           image: prodData.image_url || '/placeholder.svg',
           gallery: prodData.image_url ? [prodData.image_url] : ['/placeholder.svg'],
           features: [],
+          tech_spec: prodData.tech_spec || 'Spesifikasi standar pabrik.',
           specs: [
-            { label: 'Kategori Perangkat', value: prodData.category.toUpperCase() },
-            { label: 'Lokasi Unit', value: prodData.location }
+            { label: 'Kategori Perangkat', value: (prodData.category || '').toUpperCase() },
+            { label: 'Lokasi Unit', value: prodData.location || 'Indonesia' },
+            { label: 'Detail Spesifikasi', value: prodData.tech_spec || 'Spesifikasi standar pabrik.' } 
           ],
           sellerId: prodData.seller_id,
           seller: {
@@ -64,7 +66,6 @@ function ProductDetail({ productId, isAuthenticated, onNavigate }) {
         })
       }
 
-      // 2. Ambil seluruh daftar ulasan dari tabel reviews khusus untuk produk ini
       const { data: revData, error: revError } = await supabase
         .from('reviews')
         .select('*')
@@ -84,10 +85,36 @@ function ProductDetail({ productId, isAuthenticated, onNavigate }) {
   }
 
   useEffect(() => {
+    async function checkCurrentWishlist() {
+      if (!productId || !user?.id) {
+        setIsWishlisted(false)
+        return
+      }
+      try {
+        const { data, error } = await supabase
+          .from('wishlists')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('listing_id', productId)
+          .maybeSingle()
+
+        if (!error && data) {
+          setIsWishlisted(true)
+        } else {
+          setIsWishlisted(false)
+        }
+      } catch (err) {
+        console.error('Gagal membaca data wishlist:', err)
+      }
+    }
+
+    checkCurrentWishlist()
+  }, [productId, user])
+
+  useEffect(() => {
     fetchProductAndReviews()
   }, [productId])
 
-  // FUNGSI UNTUK MENGIRIM ULASAN BARU KE CLOUD SERVER
   async function handleSendReview(event) {
     event.preventDefault()
     if (!commentInput.trim() || !reviewName.trim()) return
@@ -96,36 +123,46 @@ function ProductDetail({ productId, isAuthenticated, onNavigate }) {
     try {
       const { error } = await supabase
         .from('reviews')
-        .insert([
-          {
-            listing_id: productId,
-            buyer_name: reviewName.trim(),
-            rating: parseInt(ratingInput),
-            comment: commentInput.trim()
-          }
-        ])
+        .insert([{ listing_id: productId, buyer_name: reviewName.trim(), rating: parseInt(ratingInput), comment: commentInput.trim() }])
 
       if (error) throw error
-
-      // Reset ulang kolom isian form setelah data masuk database
       setCommentInput('')
       setReviewName('')
-      
-      // Sinkronisasi ulang layar agar review baru langsung muncul tanpa hard-refresh
       await fetchProductAndReviews()
-
     } catch (err) {
-      console.error('Gagal mencatat ulasan baru ke server:', err.message)
+      console.error(err)
     } finally {
       setSubmittingReview(false)
     }
   }
 
-  // FUNGSI HANDLER UNTUK TOMBOL TAMBAH KE KERANJANG
+  async function handleToggleWishlist() {
+    if (!isAuthenticated || !user?.id) {
+      alert('Silakan masuk ke akun Revivo Anda terlebih dahulu untuk menambahkan produk ke Wishlist!')
+      onNavigate('login')
+      return
+    }
+
+    if (togglingWishlist) return
+    setTogglingWishlist(true)
+
+    try {
+      if (isWishlisted) {
+        await supabase.from('wishlists').delete().eq('user_id', user.id).eq('listing_id', productId)
+        setIsWishlisted(false)
+      } else {
+        await supabase.from('wishlists').insert([{ user_id: user.id, listing_id: productId }])
+        setIsWishlisted(true)
+      }
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setTogglingWishlist(false)
+    }
+  }
+
   function handleAddToCart(id, quantity) {
     if (!product) return
-
-    // Membuat struktur objek terstandardisasi agar dipahami 100% oleh CartContext frontend
     const productToCart = {
       id: product.id,
       productId: product.id, 
@@ -137,20 +174,14 @@ function ProductDetail({ productId, isAuthenticated, onNavigate }) {
       badge: product.badge,
       score: product.score
     }
-
-    // Jalankan fungsi context dengan mengirimkan objek data utuh produk beserta quantity-nya
     addItem(productToCart, quantity)
-    
-    // Alihkan navigasi langsung ke halaman Cart belanja
     onNavigate('cart')
   }
 
   if (loading) {
     return (
       <StoreLayout isAuthenticated={isAuthenticated} onNavigate={onNavigate}>
-        <div className="store-message">
-          <p>Membaca dekripsi hardware & health check dari cloud...</p>
-        </div>
+        <div className="store-message"><p>Membaca dekripsi hardware & health check dari cloud...</p></div>
       </StoreLayout>
     )
   }
@@ -158,34 +189,37 @@ function ProductDetail({ productId, isAuthenticated, onNavigate }) {
   if (!product) {
     return (
       <StoreLayout isAuthenticated={isAuthenticated} onNavigate={onNavigate}>
-        <div className="store-message">
-          <h1>Produk tidak ditemukan</h1>
-          <button type="button" className="button button--orange" onClick={() => onNavigate('shop')}>
-            Kembali ke Belanja
-          </button>
-        </div>
+        <div className="store-message"><h1>Produk tidak ditemukan</h1></div>
       </StoreLayout>
     )
   }
 
   return (
     <StoreLayout isAuthenticated={isAuthenticated} onNavigate={onNavigate}>
-      {/* Salurkan seluruh data produk, list ulasan, dan fungsinya masuk sebagai props ke komponen panel */}
+      {/* CONTAINER FLOATING UNTUK TOMBOL EDIT KHUSUS PEMILIK SAH BARANG */}
+      {user?.id && product?.sellerId && user.id === product.sellerId && (
+        <div style={{ maxWidth: '1200px', margin: '20px auto -10px auto', padding: '0 20px' }}>
+          <div style={{ background: '#fff3cd', border: '1px solid #ffeba2', padding: '15px 20px', borderRadius: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ color: '#856404', fontWeight: '500' }}>🔒 Anda adalah pemilik sah iklan gawai ini.</span>
+            <button type="button" onClick={() => onNavigate('edit-barang', { productId: product.id })} style={{ background: '#ff7f00', color: '#fff', border: '0', padding: '8px 16px', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer' }}>
+              📝 EDIT DETAIL IKLAN
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 🌟 PENJELASAN 4: Blok container div tombol kapsul besar yang kemarin di sini sudah dihapus total */}
+
       <ProductDetailPanel 
         product={product} 
         onNavigate={onNavigate} 
         onAddToCart={handleAddToCart} 
         reviews={reviews}
         onSendReview={handleSendReview}
-        reviewState={{
-          reviewName,
-          setReviewName,
-          ratingInput,
-          setRatingInput,
-          commentInput,
-          setCommentInput,
-          submittingReview
-        }}
+        isWishlisted={isWishlisted}
+        onToggleWishlist={handleToggleWishlist}
+        togglingWishlist={togglingWishlist}
+        reviewState={{ reviewName, setReviewName, ratingInput, setRatingInput, commentInput, setCommentInput, submittingReview }}
       />
     </StoreLayout>
   )
