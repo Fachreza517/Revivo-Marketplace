@@ -1,50 +1,59 @@
 function ProductSellerCard({ seller, onChat, onVisitStore }) {
   if (!seller) return null
 
+  // Fallback aman agar jika nama toko kosong, tidak menyebabkan layar putih (crash)
+  const displayShopName = seller.shopName || seller.name || 'Toko Revivo'
+  const initial = displayShopName.slice(0, 1).toUpperCase()
+
   return (
     <section className="product-seller" aria-label="Informasi penjual">
       <h2 className="product-seller__title">Penjual</h2>
-      <div className="product-seller__card">
+      
+      {/* 🌟 STRUKTUR ASLI DIKEMBALIKAN: 
+          Kita menempelkan fungsi klik langsung ke div utama agar CSS Grid kalian tidak hancur */}
+      <div 
+        className="product-seller__card" 
+        onClick={onVisitStore}
+        style={{ cursor: 'pointer', transition: 'all 0.2s ease' }}
+        title={`Kunjungi Toko ${displayShopName}`}
+        onMouseOver={(e) => e.currentTarget.style.borderColor = '#ff7f00'}
+        onMouseOut={(e) => e.currentTarget.style.borderColor = 'transparent'}
+      >
         
-        {/* 🌟 AREA PROFIL YANG BISA DIKLIK MENGARAH KE TOKO */}
+        {/* FOTO PROFIL: Akan otomatis menampilkan gambar terbaru dari Supabase Storage */}
+        {seller.avatar ? (
+          <img 
+            className="product-seller__avatar" 
+            src={seller.avatar} 
+            alt={displayShopName} 
+            style={{ objectFit: 'cover' }} 
+          />
+        ) : (
+          <div className="product-seller__avatar product-seller__avatar--fallback" aria-hidden="true">
+            {initial}
+          </div>
+        )}
+        
+        {/* NAMA TOKO & LOKASI: Akan otomatis sinkron dengan yang disetel di halaman Edit Profil */}
+        <div className="product-seller__info">
+          <strong style={{ display: 'block', transition: 'color 0.2s' }}>
+            {displayShopName}
+          </strong>
+          <span className="product-seller__name">@{seller.name}</span>
+          <p className="product-seller__location">
+            <span aria-hidden="true">📍</span> {seller.location}
+          </p>
+        </div>
+        
+        {/* TOMBOL CHAT: Menggunakan e.stopPropagation() agar saat diklik tidak malah pindah ke toko */}
         <button 
           type="button" 
-          onClick={onVisitStore}
-          style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: '12px', 
-            background: 'transparent', 
-            border: 'none', 
-            padding: '0', 
-            textAlign: 'left', 
-            cursor: 'pointer',
-            width: '100%',
-            marginBottom: '15px'
+          className="button button--outline product-seller__chat" 
+          onClick={(e) => {
+            e.stopPropagation();
+            onChat();
           }}
-          title={`Kunjungi Toko ${seller.shopName}`}
         >
-          {seller.avatar ? (
-            <img className="product-seller__avatar" src={seller.avatar} alt={seller.name} style={{ width: '50px', height: '50px', borderRadius: '50%', objectFit: 'cover' }} />
-          ) : (
-            <div className="product-seller__avatar product-seller__avatar--fallback" aria-hidden="true" style={{ width: '50px', height: '50px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              {seller.shopName ? seller.shopName.slice(0, 1).toUpperCase() : seller.name.slice(0, 1).toUpperCase()}
-            </div>
-          )}
-          
-          <div className="product-seller__info">
-            <strong style={{ display: 'block', fontSize: '1.05rem', color: '#0f172a', transition: 'color 0.2s' }} onMouseOver={(e) => e.target.style.color = '#ff7f00'} onMouseOut={(e) => e.target.style.color = '#0f172a'}>
-              {seller.shopName}
-            </strong>
-            <span className="product-seller__name" style={{ fontSize: '0.85rem', color: '#64748b' }}>@{seller.name}</span>
-            <p className="product-seller__location" style={{ fontSize: '0.85rem', color: '#64748b', margin: '4px 0 0 0' }}>
-              <span aria-hidden="true">📍</span> {seller.location}
-            </p>
-          </div>
-        </button>
-
-        {/* 🌟 TOMBOL CHAT TETAP TERPISAH */}
-        <button type="button" className="button button--outline product-seller__chat" onClick={onChat} style={{ width: '100%' }}>
           Chat Penjual
         </button>
       </div>
