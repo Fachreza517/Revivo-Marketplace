@@ -7,33 +7,26 @@ import logoRevivo from '../assets/logo-revivo.svg'
 import { supabase } from '../integrations/supabase/client.js'
 import { savingsPercent } from '../utils/formatPrice.js'
 
+// Import gambar pembayaran untuk mapping lokal
+import visaLogo from "../assets/gambar-visa.png"
+import masterLogo from "../assets/gambar-mastercard.png"
+import bcaLogo from "../assets/gambar-bca.png"
+import ovoLogo from "../assets/gambar-ovo.png"
+import gopayLogo from "../assets/gambar-gopay.png"
+
+const logoMap = {
+  'VISA': visaLogo,
+  'MASTER': masterLogo,
+  'BCA': bcaLogo,
+  'OVO': ovoLogo,
+  'GOPAY': gopayLogo
+};
+
 function CategoryIcon({ type }) {
-  if (type === 'laptop') {
-    return (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M6 5h12v10H6zM4 19h16l-1.5-4h-13z" />
-      </svg>
-    )
-  }
-  if (type === 'monitor') {
-    return (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M5 4h14v11H5zM12 15v5M9 20h6" />
-      </svg>
-    )
-  }
-  if (type === 'audio') {
-    return (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M4 14v-3a8 8 0 0 1 16 0v3M4 14h4v6H4zM16 14h4v6h-4z" />
-      </svg>
-    )
-  }
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M5 3h14v18H5z M10 18h4" />
-    </svg>
-  )
+  if (type === 'laptop') return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5h12v10H6zM4 19h16l-1.5-4h-13z" /></svg>
+  if (type === 'monitor') return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v11H5zM12 15v5M9 20h6" /></svg>
+  if (type === 'audio') return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 14v-3a8 8 0 0 1 16 0v3M4 14h4v6H4zM16 14h4v6h-4z" /></svg>
+  return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h14v18H5z M10 18h4" /></svg>
 }
 
 function Landing({ isAuthenticated, onNavigate, listingsVersion = 0 }) {
@@ -52,11 +45,9 @@ function Landing({ isAuthenticated, onNavigate, listingsVersion = 0 }) {
         if (error) throw error
 
         if (data) {
-          // 1. Format data dan hitung diskon untuk logika pengurutan
           const formatted = data.map((item) => {
-            const priceVal = Number(item.price_value || 0);
-            const oldPriceVal = Number(item.old_price_value || 0);
-            
+            const priceVal = Number(item.price_value || 0)
+            const oldPriceVal = Number(item.old_price_value || 0)
             return {
               id: item.id,
               name: item.name,
@@ -68,17 +59,11 @@ function Landing({ isAuthenticated, onNavigate, listingsVersion = 0 }) {
               badge: item.badge,
               score: item.score,
               image: item.image_url || '/placeholder.svg',
-              // Tambahkan properti discount untuk proses sorting
               discount: savingsPercent(priceVal, oldPriceVal)
             }
           })
 
-          // 2. Sort DESCENDING (b.discount - a.discount) agar diskon tertinggi di atas
-          // Lalu ambil 4 teratas
-          const sorted = formatted
-            .sort((a, b) => b.discount - a.discount)
-            .slice(0, 4);
-          
+          const sorted = formatted.sort((a, b) => b.discount - a.discount).slice(0, 4)
           setFeaturedProducts(sorted)
         }
       } catch (err) {
@@ -87,7 +72,6 @@ function Landing({ isAuthenticated, onNavigate, listingsVersion = 0 }) {
         setLoading(false)
       }
     }
-
     getFeaturedProducts()
   }, [listingsVersion])
 
@@ -95,12 +79,8 @@ function Landing({ isAuthenticated, onNavigate, listingsVersion = 0 }) {
     <main className="landing-page">
       <section className="promo-bar" aria-label="Flash sale">
         <div className="promo-bar__label">FLASH SALE</div>
-        <p className="promo-bar__copy">
-          Diskon hingga <strong>90%</strong> untuk produk pilihan!
-        </p>
-        <button type="button" onClick={() => onNavigate('shop')}>
-          BELANJA SEKARANG
-        </button>
+        <p className="promo-bar__copy">Diskon hingga <strong>90%</strong> untuk produk pilihan!</p>
+        <button type="button" onClick={() => onNavigate('shop')}>BELANJA SEKARANG</button>
       </section>
 
       <SiteHeader isAuthenticated={isAuthenticated} onNavigate={onNavigate} />
@@ -116,27 +96,17 @@ function Landing({ isAuthenticated, onNavigate, listingsVersion = 0 }) {
 
       <section className="section-block" id="belanja">
         <h2>TAWARAN SPESIAL</h2>
-        
         {loading ? (
           <p className="shop-empty">Sinkronisasi tawaran gadget terbaru...</p>
-        ) : featuredProducts.length === 0 ? (
-          <p className="shop-empty">Belum ada tawaran spesial saat ini.</p>
         ) : (
           <div className="product-grid">
             {featuredProducts.map((product) => (
-              <ProductCard
-                key={product.id}
-                product={product}
-                onSelect={(id) => onNavigate('product-detail', { productId: id })}
-              />
+              <ProductCard key={product.id} product={product} onSelect={(id) => onNavigate('product-detail', { productId: id })} />
             ))}
           </div>
         )}
-
         <div className="section-block__actions">
-          <button type="button" className="button button--orange" onClick={() => onNavigate('shop')}>
-            LIHAT SEMUA PRODUK
-          </button>
+          <button type="button" className="button button--orange" onClick={() => onNavigate('shop')}>LIHAT SEMUA PRODUK</button>
         </div>
       </section>
 
@@ -144,12 +114,7 @@ function Landing({ isAuthenticated, onNavigate, listingsVersion = 0 }) {
         <h2>CARI KATEGORI</h2>
         <div className="category-grid">
           {categories.map((category) => (
-            <button
-              className="category-card"
-              type="button"
-              key={category.label}
-              onClick={() => onNavigate('shop', { category: category.shopId })}
-            >
+            <button className="category-card" type="button" key={category.label} onClick={() => onNavigate('shop', { category: category.shopId })}>
               <CategoryIcon type={category.icon} />
               <span>{category.label}</span>
             </button>
@@ -157,19 +122,14 @@ function Landing({ isAuthenticated, onNavigate, listingsVersion = 0 }) {
         </div>
       </section>
 
-      {/* Panel Login hanya muncul jika user BELUM login */}
       {!isAuthenticated && (
         <section className="join-panel">
           <div className="join-card">
             <h2>GABUNG DENGAN KAMI!</h2>
-            <p>Dipercaya 2000 pengguna untuk jual beli elektronik second dari berbagai era yang memenuhi hobi dan kebutuhan</p>
+            <p>Dipercaya 2000 pengguna untuk jual beli elektronik second dari berbagai era.</p>
             <div className="join-card__actions">
-              <button type="button" className="button button--light" onClick={() => onNavigate('signup')}>
-                DAFTAR SEKARANG
-              </button>
-              <button type="button" className="button button--orange" onClick={() => onNavigate('login')}>
-                MASUK
-              </button>
+              <button type="button" className="button button--light" onClick={() => onNavigate('signup')}>DAFTAR SEKARANG</button>
+              <button type="button" className="button button--orange" onClick={() => onNavigate('login')}>MASUK</button>
             </div>
           </div>
         </section>
@@ -179,16 +139,12 @@ function Landing({ isAuthenticated, onNavigate, listingsVersion = 0 }) {
         <div className="site-footer__top">
           <div className="footer-brand">
             <img src={logoRevivo} alt="Revivo" />
-            <p>Marketplace elektronik bekas terpercaya dengan garansi kualitas dan harga terbaik.</p>
+            <p>Marketplace elektronik bekas terpercaya.</p>
           </div>
           {footerGroups.map((group) => (
             <div className="footer-links" key={group.title}>
               <h3>{group.title}</h3>
-              {group.links.map((link) => (
-                <a href="#footer" key={link}>
-                  {link}
-                </a>
-              ))}
+              {group.links.map((link) => <a href="#footer" key={link}>{link}</a>)}
             </div>
           ))}
         </div>
@@ -197,7 +153,12 @@ function Landing({ isAuthenticated, onNavigate, listingsVersion = 0 }) {
           <div className="payment-list">
             <strong>Metode Pembayaran:</strong>
             {paymentMethods.map((method) => (
-              <span key={method}>{method}</span>
+              <img 
+                key={method} 
+                src={logoMap[method]} 
+                alt={method} 
+                style={{ height: '24px', margin: '0 5px', display: 'inline-block', objectFit: 'contain' }} 
+              />
             ))}
           </div>
         </div>

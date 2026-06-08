@@ -2,14 +2,19 @@ import { useEffect, useState } from 'react'
 import logoRevivo from '../assets/logo-revivo.svg'
 import { footerGroups, paymentMethods } from '../data/localData.js'
 import SiteHeader from './SiteHeader.jsx'
+import visaLogo from '../assets/gambar-visa.png'
+import masterLogo from '../assets/gambar-mastercard.png'
+import bcaLogo from '../assets/gambar-bca.png'
+import ovoLogo from '../assets/gambar-ovo.png'
+import gopayLogo from '../assets/gambar-gopay.png'
 
 // 🌟 PERBAIKAN: Jalur disesuaikan menggunakan string absolut folder public/ (Tanpa tanda '../')
 const FOOTER_PAYMENT_LOGOS = {
-  VISA: '/gambar-visa.png',
-  MASTER: '/gambar-mastercard.png',
-  BCA: '/gambar-bca.png',
-  OVO: '/gambar-ovo.png',
-  GOPAY: '/gambar-gopay.png'
+  VISA: visaLogo,
+  MASTER: masterLogo,
+  BCA: bcaLogo,
+  OVO: ovoLogo,
+  GOPAY: gopayLogo
 }
 
 function StoreLayout({
