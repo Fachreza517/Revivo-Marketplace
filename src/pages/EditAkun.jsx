@@ -26,18 +26,32 @@ function EditAkun({ isAuthenticated, onNavigate }) {
   async function handleUpdate(e) {
     e.preventDefault()
     setUpdating(true)
-    const { data: { user } } = await supabase.auth.getUser()
+    
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error("Sesi login tidak valid")
 
-    const { error } = await supabase
-      .from('profiles')
-      .upsert({
-        id: user.id,
-        username: username.trim(),
-        full_name: fullName.trim()
-      })
+      const { error } = await supabase
+        .from('profiles')
+        .upsert({
+          id: user.id,
+          username: username.trim(),
+          full_name: fullName.trim()
+        })
 
-    setUpdating(false)
-    if (!error) alert('Data identitas profil berhasil diperbarui di Supabase!')
+      if (error) throw error
+
+      // Jika berhasil, berikan notifikasi sukses...
+      alert('Data identitas profil berhasil diperbarui di Supabase!')
+      
+      // 🌟 KUNCI UTAMA: Arahkan langsung kembali ke halaman Profil!
+      onNavigate('profile')
+
+    } catch (err) {
+      alert('Gagal memperbarui data: ' + err.message)
+    } finally {
+      setUpdating(false)
+    }
   }
 
   return (
