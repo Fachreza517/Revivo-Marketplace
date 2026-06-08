@@ -11,7 +11,6 @@ const TABS = [
   { id: 'reviews', label: 'REVIEW' },
 ]
 
-// 🌟 PERBAIKAN 1: Tambahkan onContactSeller ke dalam daftar Props
 function ProductDetailPanel({ 
   product, 
   onNavigate, 
@@ -118,10 +117,11 @@ function ProductDetailPanel({
             <span className="product-detail__stock">Stok: {product.stock} unit</span>
           </div>
 
-          {/* 🌟 PERBAIKAN 2: Sambungkan langsung onChat ke prop onContactSeller tanpa logika dummy */}
+          {/* 🌟 PERBAIKAN 3: Sambungkan onVisitStore ke navigasi halaman toko */}
           <ProductSellerCard
             seller={product.seller}
             onChat={onContactSeller} 
+            onVisitStore={() => onNavigate('toko', { sellerId: product.sellerId })} 
           />
 
           <div className="product-detail__actions">
