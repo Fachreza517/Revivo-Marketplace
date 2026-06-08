@@ -18,8 +18,11 @@ import KartuAlamat from './pages/KartuAlamat.jsx'
 import Pengaturan from './pages/Pengaturan.jsx'
 import EditAkun from './pages/EditAkun.jsx'
 
-// 🌟 BARU: Import Halaman Dinamis Konten Footer Startup REVIVO
+// Import Halaman Dinamis Konten Footer Startup REVIVO
 import FooterContentPage from './pages/FooterContentPage.jsx'
+
+// 🌟 BARU: Import Halaman Toko Publik
+import StorePage from './pages/StorePage.jsx'
 
 // Import jembatan Supabase yang baru kamu buat di folder integrations
 import { supabase } from './integrations/supabase/client.js'
@@ -27,6 +30,10 @@ import { supabase } from './integrations/supabase/client.js'
 function App() {
   const [page, setPage] = useState('landing')
   const [selectedProductId, setSelectedProductId] = useState(null)
+  
+  // 🌟 BARU: State untuk menampung ID Penjual/Toko yang akan dikunjungi
+  const [selectedSellerId, setSelectedSellerId] = useState(null) 
+  
   const [shopCategory, setShopCategory] = useState('all')
   const [shopSearch, setShopSearch] = useState('')
   const [activeChatThreadId, setActiveChatThreadId] = useState(null)
@@ -35,12 +42,11 @@ function App() {
   const [authUser, setAuthUser] = useState(null)
   const [message, setMessage] = useState('')
 
-  // 🌟 BARU: State Pengendali Navigasi Konten Footer Khusus
+  // State Pengendali Navigasi Konten Footer Khusus
   const [footerTab, setFooterTab] = useState('tentang-kami')
 
   // 1. PANTAU STATUS LOGIN SECARA LIVE DARI CLOUD SUPABASE
   useEffect(() => {
-    // Ambil sesi login aktif jika user melakukan refresh browser
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session && session.user) {
         setAuthUser({
@@ -52,7 +58,6 @@ function App() {
       }
     })
 
-    // Dengarkan perubahan status auth (Login, Logout, Sign Up)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session && session.user) {
         setAuthUser({
@@ -76,6 +81,11 @@ function App() {
       setSelectedProductId(options.productId)
     }
 
+    // 🌟 BARU: Tangkap parameter sellerId jika ada
+    if (options.sellerId) {
+      setSelectedSellerId(options.sellerId)
+    }
+
     if (options.category) {
       setShopCategory(options.category)
     }
@@ -88,7 +98,6 @@ function App() {
       setActiveChatThreadId(options.threadId)
     }
 
-    // 🌟 BARU: Rekam payload menu footer mana yang sedang di-klik oleh pengguna
     if (options.footerTab) {
       setFooterTab(options.footerTab)
     }
@@ -125,7 +134,7 @@ function App() {
       password: password,
       options: {
         data: {
-          username: username // Disimpan ke metadata agar otomatis ditangkap trigger profiles PostgreSQL
+          username: username 
         }
       }
     })
@@ -222,25 +231,21 @@ function App() {
         onListingCreated={() => setListingsVersion((version) => version + 1)}
       />
     )
-  } 
-  // PERBAIKAN 1: MENAMBAHKAN ROUTE EDIT BARANG MENGGUNAKAN ULANG KOMPONEN JUALBARANG
-  else if (page === 'edit-barang') {
+  } else if (page === 'edit-barang') {
     content = (
       <JualBarang
-        productId={selectedProductId} // Mengoper ID barang dinamis yang ditangkap state pusat
+        productId={selectedProductId}
         user={authUser}
         isAuthenticated={isAuthenticated}
         onNavigate={navigate}
         onListingCreated={() => setListingsVersion((version) => version + 1)}
       />
     )
-  } 
-  else if (page === 'product-detail') {
+  } else if (page === 'product-detail') {
     content = (
       <ProductDetail
         productId={selectedProductId}
         isAuthenticated={isAuthenticated}
-        // PERBAIKAN 2: Alirkan data authUser aktif agar tombol edit di halaman detail produk mengenali pemiliknya
         user={authUser} 
         onNavigate={navigate}
       />
@@ -260,9 +265,7 @@ function App() {
     )
   } else if (page === 'checkout') {
     content = <Checkout isAuthenticated={isAuthenticated} onNavigate={navigate} />
-  } 
-  // 🌟 BARU: ROUTE DINAMIS UNTUK HALAMAN INFORMASI KONTEN FOOTER STARTUP
-  else if (page === 'footer-content') {
+  } else if (page === 'footer-content') {
     content = (
       <FooterContentPage 
         contentType={footerTab}
@@ -270,9 +273,7 @@ function App() {
         onNavigate={navigate}
       />
     )
-  }
-  // 5. PENAMBAHAN ROUTING KONDISIONAL HALAMAN BARU DASHBOARD PROFIL
-  else if (page === 'lacak-pesanan') {
+  } else if (page === 'lacak-pesanan') {
     content = <LacakPesanan isAuthenticated={isAuthenticated} onNavigate={navigate} />
   } else if (page === 'wishlist') {
     content = <Wishlist isAuthenticated={isAuthenticated} onNavigate={navigate} />
@@ -285,7 +286,16 @@ function App() {
   } else if (page === 'edit-akun') {
     content = <EditAkun isAuthenticated={isAuthenticated} onNavigate={navigate} />
   } 
-  // -------------------------------------------------------------
+  // 🌟 BARU: RUTE HALAMAN TOKO PUBLIK
+  else if (page === 'toko') {
+    content = (
+      <StorePage 
+        sellerId={selectedSellerId} 
+        isAuthenticated={isAuthenticated} 
+        onNavigate={navigate} 
+      />
+    )
+  } 
   else {
     content = (
       <Landing

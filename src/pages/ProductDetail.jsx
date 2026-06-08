@@ -22,6 +22,7 @@ function ProductDetail({ productId, isAuthenticated, user, onNavigate }) {
   const fetchProductAndReviews = async () => {
     if (!productId) return
     try {
+      // 1. Tarik Data Produk
       const { data: prodData, error: prodError } = await supabase
         .from('listings')
         .select('*')
@@ -31,8 +32,32 @@ function ProductDetail({ productId, isAuthenticated, user, onNavigate }) {
       if (prodError) throw prodError
 
       if (prodData) {
-        const fallbackStoreName = `Toko Revivo ${prodData.location?.split(',')[0] || 'Gawai'}`
-        
+        // 🌟 2. PERBAIKAN: Tarik Data Profil Penjual Asli (Avatar & Nama)
+        let sellerProfile = {
+          username: `Toko Revivo ${prodData.location?.split(',')[0] || 'Gawai'}`,
+          full_name: 'Penjual',
+          avatar_url: null,
+          address: prodData.location
+        }
+
+        if (prodData.seller_id) {
+          const { data: profData } = await supabase
+            .from('profiles')
+            .select('username, full_name, avatar_url, address')
+            .eq('id', prodData.seller_id)
+            .maybeSingle()
+
+          if (profData) {
+            sellerProfile = { ...sellerProfile, ...profData }
+          }
+        }
+
+        // Ekstrak nama toko dan kota singkat
+        const storeName = sellerProfile.username || sellerProfile.full_name || 'Toko Tanpa Nama'
+        const shortLocation = sellerProfile.address
+          ? sellerProfile.address.split(',').slice(-2).join(', ').trim()
+          : (prodData.location || 'Indonesia')
+
         setProduct({
           id: prodData.id,
           name: prodData.name,
@@ -52,15 +77,15 @@ function ProductDetail({ productId, isAuthenticated, user, onNavigate }) {
           tech_spec: prodData.tech_spec || 'Spesifikasi standar pabrik.',
           specs: [
             { label: 'Kategori Perangkat', value: (prodData.category || '').toUpperCase() },
-            { label: 'Lokasi Unit', value: prodData.location || 'Indonesia' },
+            { label: 'Lokasi Unit', value: shortLocation },
             { label: 'Detail Spesifikasi', value: prodData.tech_spec || 'Spesifikasi standar pabrik.' } 
           ],
           sellerId: prodData.seller_id,
           seller: {
-            name: fallbackStoreName,
-            shopName: fallbackStoreName,
-            avatar: null,
-            location: prodData.location
+            name: sellerProfile.full_name || storeName,
+            shopName: storeName,
+            avatar: sellerProfile.avatar_url, // 👈 Avatar riil dari DB
+            location: shortLocation           // 👈 Lokasi riil dari DB
           }
         })
       }
@@ -97,16 +122,12 @@ function ProductDetail({ productId, isAuthenticated, user, onNavigate }) {
           .eq('listing_id', productId)
           .maybeSingle()
 
-        if (!error && data) {
-          setIsWishlisted(true)
-        } else {
-          setIsWishlisted(false)
-        }
+        if (!error && data) setIsWishlisted(true)
+        else setIsWishlisted(false)
       } catch (err) {
         console.error('Gagal membaca data wishlist:', err)
       }
     }
-
     checkCurrentWishlist()
   }, [productId, user])
 
@@ -117,13 +138,9 @@ function ProductDetail({ productId, isAuthenticated, user, onNavigate }) {
   async function handleSendReview(event) {
     event.preventDefault()
     if (!commentInput.trim() || !reviewName.trim()) return
-
     setSubmittingReview(true)
     try {
-      const { error } = await supabase
-        .from('reviews')
-        .insert([{ listing_id: productId, buyer_name: reviewName.trim(), rating: parseInt(ratingInput), comment: commentInput.trim() }])
-
+      const { error } = await supabase.from('reviews').insert([{ listing_id: productId, buyer_name: reviewName.trim(), rating: parseInt(ratingInput), comment: commentInput.trim() }])
       if (error) throw error
       setCommentInput('')
       setReviewName('')
@@ -141,10 +158,8 @@ function ProductDetail({ productId, isAuthenticated, user, onNavigate }) {
       onNavigate('login')
       return
     }
-
     if (togglingWishlist) return
     setTogglingWishlist(true)
-
     try {
       if (isWishlisted) {
         await supabase.from('wishlists').delete().eq('user_id', user.id).eq('listing_id', productId)
@@ -163,59 +178,29 @@ function ProductDetail({ productId, isAuthenticated, user, onNavigate }) {
   function handleAddToCart(id, quantity) {
     if (!product) return
     const productToCart = {
-      id: product.id,
-      productId: product.id, 
-      name: product.name,
-      priceValue: product.priceValue,
-      oldPriceValue: product.oldPriceValue,
-      image: product.image,
-      stock: product.stock,
-      badge: product.badge,
-      score: product.score
+      id: product.id, productId: product.id, name: product.name, priceValue: product.priceValue, oldPriceValue: product.oldPriceValue, image: product.image, stock: product.stock, badge: product.badge, score: product.score
     }
     addItem(productToCart, quantity)
     onNavigate('cart')
   }
 
-  // 🌟 FUNGSI BARU: Jembatan Pembuat Kamar Obrolan Riil
   async function handleContactSeller() {
     if (!isAuthenticated || !user?.id) {
       alert('Silakan masuk ke akun Revivo Anda terlebih dahulu untuk memulai obrolan dengan penjual!')
       onNavigate('login')
       return
     }
-
     if (user.id === product.sellerId) {
       alert('Ini adalah gawai milikmu sendiri. Kamu tidak bisa mengirim pesan ke dirimu sendiri!')
       return
     }
-
     try {
-      // 1. Cek apakah mereka berdua sudah pernah ngobrol di produk ini
-      const { data: existingThread } = await supabase
-        .from('chat_threads')
-        .select('id')
-        .eq('listing_id', productId)
-        .eq('buyer_id', user.id)
-        .eq('seller_id', product.sellerId)
-        .maybeSingle()
-
+      const { data: existingThread } = await supabase.from('chat_threads').select('id').eq('listing_id', productId).eq('buyer_id', user.id).eq('seller_id', product.sellerId).maybeSingle()
       if (existingThread) {
-        // Jika sudah ada, langsung arahkan ke halaman chat
         onNavigate('chat')
       } else {
-        // 2. Jika belum ada, buat baris kamar chat baru di database Supabase
-        const { error } = await supabase
-          .from('chat_threads')
-          .insert([{
-            listing_id: productId,
-            buyer_id: user.id,
-            seller_id: product.sellerId
-          }])
-          
+        const { error } = await supabase.from('chat_threads').insert([{ listing_id: productId, buyer_id: user.id, seller_id: product.sellerId }])
         if (error) throw error
-        
-        // Arahkan ke halaman chat setelah sukses membuat kamar
         onNavigate('chat')
       }
     } catch (err) {
@@ -262,7 +247,7 @@ function ProductDetail({ productId, isAuthenticated, user, onNavigate }) {
         isWishlisted={isWishlisted}
         onToggleWishlist={handleToggleWishlist}
         togglingWishlist={togglingWishlist}
-        onContactSeller={handleContactSeller} // 👈 Props baru dikirim ke Panel Detail
+        onContactSeller={handleContactSeller}
         reviewState={{ reviewName, setReviewName, ratingInput, setRatingInput, commentInput, setCommentInput, submittingReview }}
       />
     </StoreLayout>
