@@ -429,6 +429,8 @@ svg {
   gap: 12px;
   padding-top: 12px;
   border-top: 1px solid rgba(27, 35, 56, 0.38);
+  flex-direction: column;
+  gap: 2px;
 }
 
 .product-card__price strong {
@@ -453,6 +455,17 @@ svg {
   grid-template-columns: repeat(4, 1fr);
   gap: clamp(28px, 5vw, 65px);
   padding: 25px clamp(45px, 4vw, 55px) 0;
+}
+
+.discount-badge {
+  background: #ff7f00; /* Oranye REVIVO */
+  color: #fff;
+  font-size: 0.7rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: bold;
+  white-space: nowrap; /* Mencegah teks terpotong */
+  display: inline-block;
 }
 
 .category-card {

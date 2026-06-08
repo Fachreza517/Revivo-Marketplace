@@ -4,6 +4,12 @@ import StoreLayout from '../components/StoreLayout.jsx'
 import { useCart } from '../context/CartContext.jsx'
 import { supabase } from '../integrations/supabase/client.js'
 
+// Fungsi bantu untuk menghitung diskon
+const calculateDiscount = (price, oldPrice) => {
+  if (!oldPrice || oldPrice <= price) return 0;
+  return Math.round(((oldPrice - price) / oldPrice) * 100);
+};
+
 function ProductDetail({ productId, isAuthenticated, user, onNavigate }) {
   const { addItem } = useCart()
   const [product, setProduct] = useState(null)
@@ -34,13 +40,20 @@ function ProductDetail({ productId, isAuthenticated, user, onNavigate }) {
           sellerProfile = data;
         }
 
+        // Hitung diskon
+        const priceVal = Number(prodData.price_value);
+        const oldPriceVal = Number(prodData.old_price_value || 0);
+        const discountPercent = calculateDiscount(priceVal, oldPriceVal);
+
         setProduct({
           id: prodData.id,
           name: prodData.name,
           description: prodData.description,
-          priceValue: Number(prodData.price_value),
-          price: `Rp ${Number(prodData.price_value).toLocaleString('id-ID')}`,
-          oldPrice: prodData.old_price_value ? `Rp ${Number(prodData.old_price_value).toLocaleString('id-ID')}` : '',
+          priceValue: priceVal,
+          oldPriceValue: oldPriceVal, // Kirim ini ke Panel untuk perhitungan di sana
+          discountPercent: discountPercent, // 🌟 Mengirim persentase diskon
+          price: `Rp ${priceVal.toLocaleString('id-ID')}`,
+          oldPrice: oldPriceVal > 0 ? `Rp ${oldPriceVal.toLocaleString('id-ID')}` : '',
           image: prodData.image_url || '/placeholder.svg',
           gallery: prodData.image_url ? [prodData.image_url] : ['/placeholder.svg'],
           stock: prodData.stock,

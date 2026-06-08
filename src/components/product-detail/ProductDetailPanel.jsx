@@ -85,7 +85,7 @@ function ProductDetailPanel({
                 justifyContent: 'center', transition: 'transform 0.2s ease', outline: 'none'
               }}
             >
-              {isWishlisted ? '❤️' : '🤍'}
+              {isWishlisted ? '❤️' : '🩶'}
             </button>
           </div>
         </div>
