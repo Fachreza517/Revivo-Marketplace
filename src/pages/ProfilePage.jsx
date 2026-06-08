@@ -44,7 +44,6 @@ function ProfileProductCard({ product, onSelect, onEdit, onToggleHide, onDelete,
         <h3 style={{ fontSize: '1rem', margin: '10px 0 6px 0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%' }}>{product.name}</h3>
         <div className="product-card__price" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: '4px 8px', margin: '0 0 12px 0', width: '100%', overflow: 'hidden' }}>
           <strong style={{ fontSize: '1.05rem', color: '#0d3b66', whiteSpace: 'nowrap' }}>{product.price}</strong>
-          {product.oldPrice && <span style={{ color: '#999', textDecoration: 'line-through', fontSize: '0.8rem', whiteSpace: 'nowrap' }}>{product.oldPrice}</span>}
         </div>
       </button>
 
@@ -67,34 +66,34 @@ function ProfilePage({ user, onNavigate, onLogout, listingsVersion = 0 }) {
   const [loading, setLoading] = useState(true)
   const [refreshTrigger, setRefreshTrigger] = useState(0) 
   
-  // 🌟 State Bersih (Tanpa Data Template)
   const [cloudProfile, setCloudProfile] = useState({
     username: '',
     full_name: '',
-    address: ''
+    address: '',
+    avatar_url: ''
   })
 
-  // State Manajemen Edit Nama
+  // Manajemen Edit Nama & Toko
   const [isEditingAccount, setIsEditingAccount] = useState(false)
   const [editName, setEditName] = useState('')
+  const [editStoreName, setEditStoreName] = useState('')
   const [isSavingName, setIsSavingName] = useState(false)
 
-  // State Manajemen Edit Alamat
+  // Manajemen Edit Alamat
   const [isEditingAddress, setIsEditingAddress] = useState(false)
   const [editAddress, setEditAddress] = useState('')
   const [isSavingAddress, setIsSavingAddress] = useState(false)
 
-  // Variabel Dinamis UI
+  // Manajemen Upload Avatar
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false)
+
+  // Variabel Dinamis
   const email = user?.email || 'email@belum-diatur.com'
   const displayName = cloudProfile.full_name || 'Pengguna Revivo'
+  const storeName = cloudProfile.username || 'Toko Belum Dinamai'
   
-  // 🌟 PENYELESAIAN BUG: Fallback aman agar proses split() tidak mogok
   const initials = (displayName || 'P R').split(' ').map((part) => part?.[0] || '').join('').slice(0, 2).toUpperCase()
-  
-  // Ekstrak kota/provinsi dari alamat panjang
-  const shortLocation = cloudProfile.address 
-    ? cloudProfile.address.split(',').slice(-2).join(', ').trim()
-    : 'Lokasi belum diatur'
+  const shortLocation = cloudProfile.address ? cloudProfile.address.split(',').slice(-2).join(', ').trim() : 'Lokasi belum diatur'
 
   useEffect(() => {
     async function loadUserDashboardData() {
@@ -103,7 +102,7 @@ function ProfilePage({ user, onNavigate, onLogout, listingsVersion = 0 }) {
       try {
         const { data: profData } = await supabase
           .from('profiles')
-          .select('username, full_name, address')
+          .select('username, full_name, address, avatar_url')
           .eq('id', user.id)
           .maybeSingle()
           
@@ -111,19 +110,20 @@ function ProfilePage({ user, onNavigate, onLogout, listingsVersion = 0 }) {
           setCloudProfile({
             username: profData.username || '',
             full_name: profData.full_name || '',
-            address: profData.address || ''
+            address: profData.address || '',
+            avatar_url: profData.avatar_url || ''
           })
         }
 
-        const { data: listingsData, error: listingsError } = await supabase.from('listings').select('*').eq('seller_id', user.id).order('created_at', { ascending: false })
-        if (!listingsError && listingsData) {
+        const { data: listingsData } = await supabase.from('listings').select('*').eq('seller_id', user.id).order('created_at', { ascending: false })
+        if (listingsData) {
           setUserProducts(listingsData.map((item) => ({
             id: item.id, name: item.name, price: `Rp ${Number(item.price_value).toLocaleString('id-ID')}`, oldPrice: item.old_price_value ? `Rp ${Number(item.old_price_value).toLocaleString('id-ID')}` : '', badge: item.badge, score: item.score, image: item.image_url || '/placeholder.svg', seller_id: item.seller_id, status: item.status 
           })))
         }
 
-        const { count, error: ordersError } = await supabase.from('orders').select('*', { count: 'exact', head: true }).eq('buyer_id', user.id)
-        if (!ordersError && count !== null) setTotalOrders(count)
+        const { count } = await supabase.from('orders').select('*', { count: 'exact', head: true }).eq('buyer_id', user.id)
+        if (count !== null) setTotalOrders(count)
 
       } catch (err) {
         console.error('Gagal memuat dasbor personal:', err.message)
@@ -134,20 +134,58 @@ function ProfilePage({ user, onNavigate, onLogout, listingsVersion = 0 }) {
     loadUserDashboardData()
   }, [user, listingsVersion, refreshTrigger])
 
-  // FUNGSI SIMPAN NAMA KE DATABASE CLOUD
+  // 🌟 FUNGSI BARU: MENGUNGGAH FOTO PROFIL KE SUPABASE STORAGE
+  async function handleAvatarUpload(event) {
+    try {
+      if (!event.target.files || event.target.files.length === 0) return
+      
+      setIsUploadingAvatar(true)
+      const file = event.target.files[0]
+      const fileExt = file.name.split('.').pop()
+      const fileName = `${user.id}-${Math.random()}.${fileExt}` // Nama file unik
+
+      // 1. Upload ke bucket 'avatars'
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(fileName, file, { upsert: true })
+
+      if (uploadError) throw uploadError
+
+      // 2. Ambil Link Public dari foto tersebut
+      const { data: { publicUrl } } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(fileName)
+
+      // 3. Simpan link ke tabel profiles
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .upsert({ id: user.id, avatar_url: publicUrl })
+
+      if (updateError) throw updateError
+
+      // Update gambar di layar tanpa perlu refresh
+      setCloudProfile(prev => ({ ...prev, avatar_url: publicUrl }))
+      alert('Foto profil berhasil diperbarui!')
+      
+    } catch (error) {
+      alert('Gagal mengunggah foto: ' + error.message)
+    } finally {
+      setIsUploadingAvatar(false)
+    }
+  }
+
+  // FUNGSI SIMPAN NAMA & TOKO
   async function handleSaveProfile() {
     if (!editName.trim()) return
     setIsSavingName(true)
     try {
-      if (!user?.id) throw new Error("Sesi login tidak valid")
-
       const { error } = await supabase
         .from('profiles')
-        .upsert({ id: user.id, full_name: editName })
+        .upsert({ id: user.id, full_name: editName, username: editStoreName })
 
       if (error) throw error
 
-      setCloudProfile(prev => ({ ...prev, full_name: editName }))
+      setCloudProfile(prev => ({ ...prev, full_name: editName, username: editStoreName }))
       setIsEditingAccount(false)
     } catch (err) {
       alert('Gagal memperbarui nama: ' + err.message)
@@ -156,19 +194,12 @@ function ProfilePage({ user, onNavigate, onLogout, listingsVersion = 0 }) {
     }
   }
 
-  // FUNGSI SIMPAN ALAMAT UTAMA KE DATABASE CLOUD
+  // FUNGSI SIMPAN ALAMAT
   async function handleSaveAddress() {
-    if (!editAddress.trim()) return
     setIsSavingAddress(true)
     try {
-      if (!user?.id) throw new Error("Sesi login tidak valid")
-
-      const { error } = await supabase
-        .from('profiles')
-        .upsert({ id: user.id, address: editAddress })
-
+      const { error } = await supabase.from('profiles').upsert({ id: user.id, address: editAddress })
       if (error) throw error
-
       setCloudProfile(prev => ({ ...prev, address: editAddress }))
       setIsEditingAddress(false)
     } catch (err) {
@@ -181,19 +212,17 @@ function ProfilePage({ user, onNavigate, onLogout, listingsVersion = 0 }) {
   async function handleToggleHideProduct(id, currentHiddenStatus) {
     try {
       const nextStatus = currentHiddenStatus ? 'available' : 'hidden'
-      const { error } = await supabase.from('listings').update({ status: nextStatus }).eq('id', id).eq('seller_id', user.id)
-      if (error) throw error
+      await supabase.from('listings').update({ status: nextStatus }).eq('id', id).eq('seller_id', user.id)
       setRefreshTrigger(prev => prev + 1) 
     } catch (err) {
-      alert('Gagal mengubah status visibilitas: ' + err.message)
+      alert('Gagal mengubah status: ' + err.message)
     }
   }
 
   async function handleDeleteProduct(id, name) {
     if (!window.confirm(`Hapus permanen iklan "${name}"?`)) return
     try {
-      const { error } = await supabase.from('listings').delete().eq('id', id).eq('seller_id', user.id) 
-      if (error) throw error
+      await supabase.from('listings').delete().eq('id', id).eq('seller_id', user.id) 
       setRefreshTrigger(prev => prev + 1)
     } catch (err) {
       alert('Gagal menghapus produk: ' + err.message)
@@ -227,30 +256,58 @@ function ProfilePage({ user, onNavigate, onLogout, listingsVersion = 0 }) {
 
           <section className="dashboard-cards">
             
-            {/* KOTAK 1: INFORMASI AKUN (INLINE EDIT NAMA) */}
+            {/* KOTAK 1: INFORMASI AKUN (DENGAN UPLOAD FOTO & NAMA TOKO) */}
             <article className="dashboard-card dashboard-card--account">
               <h2>INFORMASI AKUN</h2>
               <div className="dashboard-card__content account-summary">
-                <div className="avatar">
-                  {user?.avatar ? (
-                    <img src={user.avatar} alt={displayName} />
-                  ) : (
-                    <span aria-hidden="true">{initials}</span>
-                  )}
+                
+                {/* 🌟 AREA AVATAR YANG BISA DIKLIK */}
+                <div className="avatar" style={{ position: 'relative', overflow: 'visible', background: cloudProfile.avatar_url ? 'transparent' : '#64748b' }}>
+                  <input 
+                    type="file" 
+                    id="avatarUpload" 
+                    accept="image/*" 
+                    onChange={handleAvatarUpload} 
+                    style={{ display: 'none' }} 
+                    disabled={isUploadingAvatar}
+                  />
+                  <label htmlFor="avatarUpload" style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: isUploadingAvatar ? 'wait' : 'pointer', borderRadius: '50%', overflow: 'hidden' }}>
+                    {isUploadingAvatar ? (
+                      <span style={{ fontSize: '1.5rem', animation: 'spin 1s linear infinite' }}>⏳</span>
+                    ) : cloudProfile.avatar_url ? (
+                      <img src={cloudProfile.avatar_url} alt={displayName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ) : (
+                      <span aria-hidden="true">{initials}</span>
+                    )}
+                  </label>
+                  {/* Ikon Kamera Kecil sebagai petunjuk UX */}
+                  <label htmlFor="avatarUpload" style={{ position: 'absolute', bottom: '-4px', right: '-4px', background: '#ff7f00', color: '#fff', width: '28px', height: '28px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.8rem', cursor: 'pointer', border: '2px solid #fff', boxShadow: '0 2px 4px rgba(0,0,0,0.2)' }}>
+                    📷
+                  </label>
                 </div>
                 
                 <div style={{ flex: '1', minWidth: '0' }}>
                   {isEditingAccount ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '10px' }}>
+                      <label style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 'bold' }}>Nama Pengguna Lengkap:</label>
                       <input 
                         type="text" 
                         value={editName}
                         onChange={(e) => setEditName(e.target.value)}
                         placeholder="Nama Lengkap Baru"
                         style={{ width: '100%', padding: '8px 12px', borderRadius: '4px', border: '1px solid #ff7f00', outline: 'none' }}
-                        autoFocus
                       />
-                      <div style={{ display: 'flex', gap: '8px' }}>
+                      
+                      <label style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 'bold', marginTop: '4px' }}>Nama Toko (Sistem):</label>
+                      <input 
+                        type="text" 
+                        value={editStoreName}
+                        onChange={(e) => setEditStoreName(e.target.value)}
+                        placeholder="Misal: Ahmad Gawai Store"
+                        style={{ width: '100%', padding: '8px 12px', borderRadius: '4px', border: '1px solid #ff7f00', outline: 'none' }}
+                      />
+
+                      <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
                         <button type="button" onClick={handleSaveProfile} disabled={isSavingName} style={{ background: '#10b981', color: '#fff', border: 'none', padding: '6px 12px', borderRadius: '4px', fontWeight: 'bold', cursor: isSavingName ? 'not-allowed' : 'pointer', fontSize: '0.85rem' }}>
                           {isSavingName ? 'Menyimpan...' : 'SIMPAN'}
                         </button>
@@ -262,7 +319,11 @@ function ProfilePage({ user, onNavigate, onLogout, listingsVersion = 0 }) {
                   ) : (
                     <>
                       <h3 style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>{displayName}</h3>
-                      <p style={{ color: '#64748b' }}>{shortLocation}</p>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', margin: '4px 0', background: '#f8fafc', padding: '4px 8px', borderRadius: '4px', display: 'inline-flex' }}>
+                        <span style={{ fontSize: '0.85rem' }}>🏪</span>
+                        <strong style={{ fontSize: '0.85rem', color: '#0f172a' }}>{storeName}</strong>
+                      </div>
+                      <p style={{ color: '#64748b', fontSize: '0.85rem', marginTop: '4px' }}>{shortLocation}</p>
                     </>
                   )}
                 </div>
@@ -270,32 +331,35 @@ function ProfilePage({ user, onNavigate, onLogout, listingsVersion = 0 }) {
                 <p>Email Utama: <br/><strong style={{color: '#334155'}}>{email}</strong></p>
                 
                 {!isEditingAccount && (
-                  <button type="button" onClick={() => { setEditName(cloudProfile.full_name || ''); setIsEditingAccount(true); }}>
-                    EDIT NAMA
+                  <button type="button" onClick={() => { 
+                    setEditName(cloudProfile.full_name || ''); 
+                    setEditStoreName(cloudProfile.username || '');
+                    setIsEditingAccount(true); 
+                  }}>
+                    EDIT NAMA & TOKO
                   </button>
                 )}
               </div>
             </article>
 
-            {/* KOTAK 2: ALAMAT UTAMA (INLINE EDIT ALAMAT) */}
+            {/* KOTAK 2: ALAMAT UTAMA */}
             <article className="dashboard-card">
               <h2>ALAMAT UTAMA</h2>
               <div className="dashboard-card__content">
-                <p style={{ fontWeight: 'bold', color: '#0f172a' }}>{displayName}</p>
+                <p style={{ fontWeight: 'bold', color: '#0f172a' }}>Penerima: {displayName}</p>
                 
                 {isEditingAddress ? (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', margin: '10px 0' }}>
                     <textarea 
                       value={editAddress}
                       onChange={(e) => setEditAddress(e.target.value)}
-                      placeholder="Masukkan alamat lengkap pengiriman (Jalan, RT/RW, Kota, Provinsi, Kode Pos)..."
+                      placeholder="Masukkan alamat lengkap pengiriman..."
                       rows={4}
                       style={{ width: '100%', padding: '8px 12px', borderRadius: '4px', border: '1px solid #ff7f00', outline: 'none', fontFamily: 'inherit', resize: 'vertical' }}
-                      autoFocus
                     />
                     <div style={{ display: 'flex', gap: '8px' }}>
-                      <button type="button" onClick={handleSaveAddress} disabled={isSavingAddress} style={{ background: '#10b981', color: '#fff', border: 'none', padding: '6px 12px', borderRadius: '4px', fontWeight: 'bold', cursor: isSavingAddress ? 'not-allowed' : 'pointer', fontSize: '0.85rem' }}>
-                        {isSavingAddress ? 'Menyimpan...' : 'SIMPAN ALAMAT'}
+                      <button type="button" onClick={handleSaveAddress} disabled={isSavingAddress} style={{ background: '#10b981', color: '#fff', border: 'none', padding: '6px 12px', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.85rem' }}>
+                        SIMPAN ALAMAT
                       </button>
                       <button type="button" onClick={() => setIsEditingAddress(false)} style={{ background: '#ef4444', color: '#fff', border: 'none', padding: '6px 12px', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.85rem' }}>
                         BATAL
@@ -342,74 +406,13 @@ function ProfilePage({ user, onNavigate, onLogout, listingsVersion = 0 }) {
             ) : (
               <div className="history-grid">
                 {userProducts.map((product) => (
-                  <ProfileProductCard
-                    key={product.id} product={product}
-                    onSelect={(id) => onNavigate('product-detail', { productId: id })}
-                    onEdit={(id) => onNavigate('edit-barang', { productId: id })}
-                    onToggleHide={handleToggleHideProduct}
-                    onDelete={handleDeleteProduct}
-                    isOwner={user?.id === product.seller_id}
-                  />
+                  <ProfileProductCard key={product.id} product={product} onSelect={(id) => onNavigate('product-detail', { productId: id })} onEdit={(id) => onNavigate('edit-barang', { productId: id })} onToggleHide={handleToggleHideProduct} onDelete={handleDeleteProduct} isOwner={user?.id === product.seller_id} />
                 ))}
               </div>
             )}
           </section>
         </div>
       </section>
-
-      {/* FOOTER */}
-      <footer className="site-footer" style={{ marginTop: '50px', borderTop: '1px solid #e2e8f0', paddingTop: '40px' }}>
-        <div className="site-footer__top" style={{ display: 'flex', justifyContent: 'space-between', gap: '30px', flexWrap: 'wrap', marginBottom: '30px' }}>
-          <div className="footer-brand" style={{ flex: '1', minWidth: '250px' }}>
-            <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#ff7f00', marginBottom: '10px' }}>REVIVO</h2>
-            <p style={{ color: '#cbd5e1', fontSize: '0.95rem', lineHeight: '1.5' }}>
-              Marketplace elektronik bekas terpercaya dengan garansi kualitas dan harga terbaik.
-            </p>
-          </div>
-
-          {footerGroups && footerGroups.map((group) => (
-            <div className="footer-links" key={group.title} style={{ display: 'flex', flexDirection: 'column', gap: '8px', minWidth: '150px' }}>
-              <h3 style={{ fontSize: '1.1rem', fontWeight: 'bold', color: '#fff', marginBottom: '5px' }}>{group.title}</h3>
-              {group.links.map((link) => {
-                let tabKey = 'tentang-kami'
-                if (link === 'Cara Kerja') tabKey = 'cara-kerja'
-                if (link === 'Syarat & Ketentuan') tabKey = 'syarat-ketentuan'
-                if (link === 'Kebijakan Privasi') tabKey = 'kebijakan-privasi'
-                if (link === 'Lacak Pesanan') tabKey = 'lacak-pesanan'
-                
-                const targetPage = link === 'Lacak Pesanan' ? 'lacak-pesanan' : 'footer-content'
-
-                return (
-                  <button
-                    key={link}
-                    type="button"
-                    onClick={() => onNavigate(targetPage, { footerTab: tabKey })}
-                    style={{ background: 'none', border: 'none', color: '#cbd5e1', padding: '2px 0', textAlign: 'left', font: 'inherit', cursor: 'pointer', display: 'block', fontSize: '0.9rem', transition: 'color 0.2s ease' }}
-                    onMouseOver={(e) => e.currentTarget.style.color = '#ff7f00'}
-                    onMouseOut={(e) => e.currentTarget.style.color = '#cbd5e1'}
-                  >
-                    {link}
-                  </button>
-                )
-              })}
-            </div>
-          ))}
-        </div>
-
-        <div className="site-footer__bottom" style={{ borderTop: '1px solid #334155', paddingTop: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '15px' }}>
-          <p style={{ color: '#94a3b8', fontSize: '0.85rem' }}>(c) 2026 Revivo. Hak Cipta Dilindungi.</p>
-          <div className="payment-list" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <strong style={{ color: '#fff', fontSize: '0.9rem' }}>Metode Pembayaran:</strong>
-            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-              {paymentMethods && paymentMethods.map((method) => (
-                <span key={method} style={{ background: '#fff', color: '#0f172a', padding: '4px 12px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 'bold', textTransform: 'uppercase', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: '60px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
-                  {method}
-                </span>
-              ))}
-            </div>
-          </div>
-        </div>
-      </footer>
     </main>
   )
 }
