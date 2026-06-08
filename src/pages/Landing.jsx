@@ -4,8 +4,8 @@ import ProductCard from '../components/ProductCard.jsx'
 import SiteHeader from '../components/SiteHeader.jsx'
 import { categories, footerGroups, paymentMethods } from '../data/localData.js'
 import logoRevivo from '../assets/logo-revivo.svg'
-// Import jembatan Supabase Client
 import { supabase } from '../integrations/supabase/client.js'
+import { savingsPercent } from '../utils/formatPrice.js'
 
 function CategoryIcon({ type }) {
   if (type === 'laptop') {
@@ -15,7 +15,6 @@ function CategoryIcon({ type }) {
       </svg>
     )
   }
-
   if (type === 'monitor') {
     return (
       <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -23,7 +22,6 @@ function CategoryIcon({ type }) {
       </svg>
     )
   }
-
   if (type === 'audio') {
     return (
       <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -31,7 +29,6 @@ function CategoryIcon({ type }) {
       </svg>
     )
   }
-
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path d="M5 3h14v18H5z M10 18h4" />
@@ -40,11 +37,9 @@ function CategoryIcon({ type }) {
 }
 
 function Landing({ isAuthenticated, onNavigate, listingsVersion = 0 }) {
-  // 1. Siapkan state untuk menampung 4 produk tawaran spesial dari cloud
   const [featuredProducts, setFeaturedProducts] = useState([])
   const [loading, setLoading] = useState(true)
 
-  // 2. Tarik 4 produk paling baru diunggah dari tabel listings
   useEffect(() => {
     async function getFeaturedProducts() {
       setLoading(true)
@@ -52,30 +47,42 @@ function Landing({ isAuthenticated, onNavigate, listingsVersion = 0 }) {
         const { data, error } = await supabase
           .from('listings')
           .select('*')
-          .eq('status', 'active')
-          .order('created_at', { ascending: false })
-          .limit(4) // Batasi hanya mengambil 4 item teratas
+          .eq('status', 'available')
 
         if (error) throw error
 
         if (data) {
-          // Format skema kolom database agar dikenali oleh ProductCard.jsx bawaan tim frontend
-          const formatted = data.map((item) => ({
-            id: item.id,
-            name: item.name,
-            category: item.category,
-            priceValue: Number(item.price_value),
-            price: `Rp ${Number(item.price_value).toLocaleString('id-ID')}`,
-            oldPrice: item.old_price_value ? `Rp ${Number(item.old_price_value).toLocaleString('id-ID')}` : '',
-            oldPriceValue: item.old_price_value ? Number(item.old_price_value) : 0,
-            badge: item.badge,
-            score: item.score,
-            image: item.image_url || '/placeholder.svg'
-          }))
-          setFeaturedProducts(formatted)
+          // 1. Format data dan hitung diskon untuk logika pengurutan
+          const formatted = data.map((item) => {
+            const priceVal = Number(item.price_value || 0);
+            const oldPriceVal = Number(item.old_price_value || 0);
+            
+            return {
+              id: item.id,
+              name: item.name,
+              category: item.category,
+              priceValue: priceVal,
+              price: `Rp ${priceVal.toLocaleString('id-ID')}`,
+              oldPrice: oldPriceVal > 0 ? `Rp ${oldPriceVal.toLocaleString('id-ID')}` : '',
+              oldPriceValue: oldPriceVal,
+              badge: item.badge,
+              score: item.score,
+              image: item.image_url || '/placeholder.svg',
+              // Tambahkan properti discount untuk proses sorting
+              discount: savingsPercent(priceVal, oldPriceVal)
+            }
+          })
+
+          // 2. Sort DESCENDING (b.discount - a.discount) agar diskon tertinggi di atas
+          // Lalu ambil 4 teratas
+          const sorted = formatted
+            .sort((a, b) => b.discount - a.discount)
+            .slice(0, 4);
+          
+          setFeaturedProducts(sorted)
         }
       } catch (err) {
-        console.error('Gagal memuat produk unggulan beranda:', err.message)
+        console.error('Gagal memuat produk:', err.message)
       } finally {
         setLoading(false)
       }
@@ -113,7 +120,7 @@ function Landing({ isAuthenticated, onNavigate, listingsVersion = 0 }) {
         {loading ? (
           <p className="shop-empty">Sinkronisasi tawaran gadget terbaru...</p>
         ) : featuredProducts.length === 0 ? (
-          <p className="shop-empty">Belum ada tawaran spesial saat ini. Silakan pasang produk baru.</p>
+          <p className="shop-empty">Belum ada tawaran spesial saat ini.</p>
         ) : (
           <div className="product-grid">
             {featuredProducts.map((product) => (
@@ -150,20 +157,23 @@ function Landing({ isAuthenticated, onNavigate, listingsVersion = 0 }) {
         </div>
       </section>
 
-      <section className="join-panel">
-        <div className="join-card">
-          <h2>GABUNG DENGAN KAMI!</h2>
-          <p>Dipercaya 2000 pengguna untuk jual beli elektronik second dari berbagai era yang memenuhi hobi dan kebutuhan</p>
-          <div className="join-card__actions">
-            <button type="button" className="button button--light" onClick={() => onNavigate('signup')}>
-              DAFTAR SEKARANG
-            </button>
-            <button type="button" className="button button--orange" onClick={() => onNavigate('login')}>
-              MASUK
-            </button>
+      {/* Panel Login hanya muncul jika user BELUM login */}
+      {!isAuthenticated && (
+        <section className="join-panel">
+          <div className="join-card">
+            <h2>GABUNG DENGAN KAMI!</h2>
+            <p>Dipercaya 2000 pengguna untuk jual beli elektronik second dari berbagai era yang memenuhi hobi dan kebutuhan</p>
+            <div className="join-card__actions">
+              <button type="button" className="button button--light" onClick={() => onNavigate('signup')}>
+                DAFTAR SEKARANG
+              </button>
+              <button type="button" className="button button--orange" onClick={() => onNavigate('login')}>
+                MASUK
+              </button>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       <footer className="site-footer">
         <div className="site-footer__top">
@@ -171,7 +181,6 @@ function Landing({ isAuthenticated, onNavigate, listingsVersion = 0 }) {
             <img src={logoRevivo} alt="Revivo" />
             <p>Marketplace elektronik bekas terpercaya dengan garansi kualitas dan harga terbaik.</p>
           </div>
-
           {footerGroups.map((group) => (
             <div className="footer-links" key={group.title}>
               <h3>{group.title}</h3>
@@ -183,7 +192,6 @@ function Landing({ isAuthenticated, onNavigate, listingsVersion = 0 }) {
             </div>
           ))}
         </div>
-
         <div className="site-footer__bottom">
           <p>(c) 2026 Revivo. Hak Cipta Dilindungi.</p>
           <div className="payment-list">
