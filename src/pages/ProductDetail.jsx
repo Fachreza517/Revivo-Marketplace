@@ -32,21 +32,26 @@ function ProductDetail({ productId, isAuthenticated, user, onNavigate }) {
       if (prodError) throw prodError
 
       if (prodData) {
-        // 🌟 2. PERBAIKAN: Tarik Data Profil Penjual Asli (Avatar & Nama)
+        // 🌟 2. PERBAIKAN: Hapus nama otomatis. Wajib ambil dari Profil asli!
         let sellerProfile = {
-          username: `Toko Revivo ${prodData.location?.split(',')[0] || 'Gawai'}`,
-          full_name: 'Penjual',
+          username: 'Gagal Memuat Toko (Database Terkunci)',
+          full_name: 'Penjual Tidak Ditemukan',
           avatar_url: null,
           address: prodData.location
         }
 
         if (prodData.seller_id) {
-          const { data: profData } = await supabase
+          const { data: profData, error: profError } = await supabase
             .from('profiles')
             .select('username, full_name, avatar_url, address')
             .eq('id', prodData.seller_id)
             .maybeSingle()
 
+          if (profError) {
+            console.error("🚨 SUPABASE MEMBLOKIR DATA PROFIL ATAU DATA KOSONG!", profError)
+          }
+
+          // Jika Supabase mengizinkan akses, timpa dengan data asli Nguawor!
           if (profData) {
             sellerProfile = { ...sellerProfile, ...profData }
           }
@@ -82,7 +87,7 @@ function ProductDetail({ productId, isAuthenticated, user, onNavigate }) {
           ],
           sellerId: prodData.seller_id,
           seller: {
-            name: sellerProfile.full_name || storeName,
+            name: sellerProfile.full_name,
             shopName: storeName,
             avatar: sellerProfile.avatar_url, // 👈 Avatar riil dari DB
             location: shortLocation           // 👈 Lokasi riil dari DB
