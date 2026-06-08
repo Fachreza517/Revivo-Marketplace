@@ -43,7 +43,7 @@ function ProductCard({ product, onSelect }) {
           {product.oldPrice && (
             <span style={{ 
               textDecoration: 'line-through', 
-              color: '#94a3b8', 
+              color: '#ffffffa5', 
               fontSize: '0.8rem',
               display: 'block'
             }}>
@@ -63,6 +63,7 @@ function ProductCard({ product, onSelect }) {
                 padding: '2px 6px', 
                 borderRadius: '4px',
                 fontWeight: 'bold',
+                textDecoration: 'none',
                 whiteSpace: 'nowrap'
               }}>
                 HEMAT {discount}%
