@@ -33,7 +33,9 @@ function Wishlist({ isAuthenticated, onNavigate }) {
   return (
     <StoreLayout isAuthenticated={isAuthenticated} onNavigate={onNavigate} showPromo={false}>
       <div style={{ maxWidth: '1000px', margin: '40px auto', padding: '0 20px', fontFamily: 'sans-serif' }}>
-        <h1 style={{ color: '#0d3b66', borderBottom: '2px solid #ff7f00', paddingBottom: '10px', fontSize: '1.8rem' }}>DAFTAR KEINGINAN (WISHLIST)</h1>
+        <h1 style={{ color: '#0d3b66', borderBottom: '2px solid #ff7f00', paddingBottom: '10px', fontSize: '1.8rem' }}>
+          DAFTAR KEINGINAN (WISHLIST)
+        </h1>
         
         {loading ? (
           <p>Membaca daftar keinginan dari cloud...</p>
@@ -54,12 +56,48 @@ function Wishlist({ isAuthenticated, onNavigate }) {
               if (!prod) return null
               return (
                 <div key={item.id} style={{ border: '1px solid #ddd', padding: '15px', borderRadius: '6px', background: '#fff', textAlign: 'center' }}>
-                  <img src={prod.image_url || '/placeholder.svg'} alt="" style={{ height: '140px', objectFit: 'contain', marginBottom: '10px' }} />
-                  <h3 style={{ fontSize: '1rem', margin: '5px 0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{prod.name}</h3>
-                  <p style={{ color: '#ff7f00', fontWeight: 'bold', margin: '5px 0' }}>Rp {Number(prod.price_value).toLocaleString('id-ID')}</p>
+                  
+                  {/* Container gambar dengan overflow hidden agar tidak meluap */}
+                  <div style={{ 
+                    height: '140px', 
+                    overflow: 'hidden', 
+                    marginBottom: '10px', 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center',
+                    backgroundColor: '#f9f9f9' 
+                  }}>
+                    <img 
+                      src={prod.image_url || '/placeholder.svg'} 
+                      alt={prod.name} 
+                      style={{ 
+                        maxWidth: '100%', 
+                        maxHeight: '100%', 
+                        objectFit: 'contain' 
+                      }} 
+                    />
+                  </div>
+
+                  <h3 style={{ fontSize: '1rem', margin: '5px 0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {prod.name}
+                  </h3>
+                  <p style={{ color: '#ff7f00', fontWeight: 'bold', margin: '5px 0' }}>
+                    Rp {Number(prod.price_value || 0).toLocaleString('id-ID')}
+                  </p>
                   <button 
                     onClick={() => onNavigate('product-detail', { productId: prod.id })}
-                    style={{ background: '#0d3b66', color: '#fff', width: '100%', border: '0', padding: '8px', borderRadius: '4px', cursor: 'pointer', marginTop: '10px', fontWeight: 'bold', fontSize: '0.85rem' }}
+                    style={{ 
+                      background: '#0d3b66', 
+                      color: '#fff', 
+                      width: '100%', 
+                      border: '0', 
+                      padding: '8px', 
+                      borderRadius: '4px', 
+                      cursor: 'pointer', 
+                      marginTop: '10px', 
+                      fontWeight: 'bold', 
+                      fontSize: '0.85rem' 
+                    }}
                   >
                     LIHAT DETAIL
                   </button>
