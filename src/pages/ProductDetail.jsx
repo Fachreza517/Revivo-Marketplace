@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import ProductDetailPanel from '../components/product-detail/ProductDetailPanel.jsx'
 import StoreLayout from '../components/StoreLayout.jsx'
 import { useCart } from '../context/CartContext.jsx'
-// Import jembatan Supabase Client
 import { supabase } from '../integrations/supabase/client.js'
 
 function ProductDetail({ productId, isAuthenticated, user, onNavigate }) {
@@ -178,6 +177,53 @@ function ProductDetail({ productId, isAuthenticated, user, onNavigate }) {
     onNavigate('cart')
   }
 
+  // 🌟 FUNGSI BARU: Jembatan Pembuat Kamar Obrolan Riil
+  async function handleContactSeller() {
+    if (!isAuthenticated || !user?.id) {
+      alert('Silakan masuk ke akun Revivo Anda terlebih dahulu untuk memulai obrolan dengan penjual!')
+      onNavigate('login')
+      return
+    }
+
+    if (user.id === product.sellerId) {
+      alert('Ini adalah gawai milikmu sendiri. Kamu tidak bisa mengirim pesan ke dirimu sendiri!')
+      return
+    }
+
+    try {
+      // 1. Cek apakah mereka berdua sudah pernah ngobrol di produk ini
+      const { data: existingThread } = await supabase
+        .from('chat_threads')
+        .select('id')
+        .eq('listing_id', productId)
+        .eq('buyer_id', user.id)
+        .eq('seller_id', product.sellerId)
+        .maybeSingle()
+
+      if (existingThread) {
+        // Jika sudah ada, langsung arahkan ke halaman chat
+        onNavigate('chat')
+      } else {
+        // 2. Jika belum ada, buat baris kamar chat baru di database Supabase
+        const { error } = await supabase
+          .from('chat_threads')
+          .insert([{
+            listing_id: productId,
+            buyer_id: user.id,
+            seller_id: product.sellerId
+          }])
+          
+        if (error) throw error
+        
+        // Arahkan ke halaman chat setelah sukses membuat kamar
+        onNavigate('chat')
+      }
+    } catch (err) {
+      console.error('Gagal memproses obrolan:', err.message)
+      alert('Gagal menyambungkan ke penjual: ' + err.message)
+    }
+  }
+
   if (loading) {
     return (
       <StoreLayout isAuthenticated={isAuthenticated} onNavigate={onNavigate}>
@@ -196,7 +242,6 @@ function ProductDetail({ productId, isAuthenticated, user, onNavigate }) {
 
   return (
     <StoreLayout isAuthenticated={isAuthenticated} onNavigate={onNavigate}>
-      {/* CONTAINER FLOATING UNTUK TOMBOL EDIT KHUSUS PEMILIK SAH BARANG */}
       {user?.id && product?.sellerId && user.id === product.sellerId && (
         <div style={{ maxWidth: '1200px', margin: '20px auto -10px auto', padding: '0 20px' }}>
           <div style={{ background: '#fff3cd', border: '1px solid #ffeba2', padding: '15px 20px', borderRadius: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -208,8 +253,6 @@ function ProductDetail({ productId, isAuthenticated, user, onNavigate }) {
         </div>
       )}
 
-      {/* 🌟 PENJELASAN 4: Blok container div tombol kapsul besar yang kemarin di sini sudah dihapus total */}
-
       <ProductDetailPanel 
         product={product} 
         onNavigate={onNavigate} 
@@ -219,6 +262,7 @@ function ProductDetail({ productId, isAuthenticated, user, onNavigate }) {
         isWishlisted={isWishlisted}
         onToggleWishlist={handleToggleWishlist}
         togglingWishlist={togglingWishlist}
+        onContactSeller={handleContactSeller} // 👈 Props baru dikirim ke Panel Detail
         reviewState={{ reviewName, setReviewName, ratingInput, setRatingInput, commentInput, setCommentInput, submittingReview }}
       />
     </StoreLayout>
