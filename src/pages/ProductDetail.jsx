@@ -8,7 +8,6 @@ function ProductDetail({ productId, isAuthenticated, user, onNavigate }) {
   const { addItem } = useCart()
   const [product, setProduct] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [reviews, setReviews] = useState([])
 
   const fetchProductAndReviews = async () => {
     if (!productId) return
@@ -22,7 +21,7 @@ function ProductDetail({ productId, isAuthenticated, user, onNavigate }) {
       if (prodError) throw prodError
 
       if (prodData) {
-        // Tarik profil penjual secara ketat
+        // Tarik data profil penjual yang asli
         let sellerProfile = null;
         if (prodData.seller_id) {
           const { data } = await supabase
@@ -47,14 +46,16 @@ function ProductDetail({ productId, isAuthenticated, user, onNavigate }) {
           score: prodData.score,
           sellerId: prodData.seller_id,
           seller: {
+            // Data diambil murni dari profil, tanpa penggabungan kata "Toko Revivo"
             name: sellerProfile?.full_name || 'Penjual',
             shopName: sellerProfile?.username || 'Toko Tanpa Nama',
             avatar: sellerProfile?.avatar_url || null,
-            location: sellerProfile?.address ? sellerProfile.address.split(',').slice(-2).join(', ').trim() : (prodData.location || 'Indonesia')
+            location: prodData.location || 'Indonesia' 
           }
         })
       }
     } catch (err) {
+      console.error(err)
       setProduct(null)
     } finally {
       setLoading(false)
