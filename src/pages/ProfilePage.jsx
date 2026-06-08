@@ -38,7 +38,6 @@ function ProfileIcon({ type }) {
   )
 }
 
-// Panel Kontrol Sembunyikan & Hapus Produk
 function ProfileProductCard({ product, onSelect, onEdit, onToggleHide, onDelete, isOwner }) {
   const isHidden = product.status === 'hidden' || product.status === 'archived'
 
@@ -110,7 +109,6 @@ function ProfileProductCard({ product, onSelect, onEdit, onToggleHide, onDelete,
         </div>
       </button>
 
-      {/* KONTROL BARIS UTAMA UNTUK PENJUAL */}
       {isOwner && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', width: '100%', marginTop: 'auto' }}>
           <button
@@ -155,6 +153,11 @@ function ProfilePage({ user, onNavigate, onLogout, listingsVersion = 0 }) {
     full_name: 'Wong Jowo Asli',
     address: 'Jl. Pahlawan No. 10, Kota Semarang, Jawa Tengah, 50131, Indonesia'
   })
+
+  // 🌟 STATE BARU: Manajemen Mode Edit Akun
+  const [isEditingAccount, setIsEditingAccount] = useState(false)
+  const [editName, setEditName] = useState('')
+  const [isSaving, setIsSaving] = useState(false)
 
   const displayName = cloudProfile.full_name || user?.username || 'wongjowo'
   const firstName = cloudProfile.username || user?.username || 'wongjowo'
@@ -218,6 +221,31 @@ function ProfilePage({ user, onNavigate, onLogout, listingsVersion = 0 }) {
 
     loadUserDashboardData()
   }, [user, listingsVersion, refreshTrigger])
+
+  // 🌟 FUNGSI BARU: Simpan Nama Akun ke Database
+  async function handleSaveProfile() {
+    if (!editName.trim()) return
+    
+    setIsSaving(true)
+    try {
+      if (!user?.id) throw new Error("Sesi login tidak valid")
+
+      const { error } = await supabase
+        .from('profiles')
+        .update({ full_name: editName })
+        .eq('id', user.id)
+
+      if (error) throw error
+
+      setCloudProfile(prev => ({ ...prev, full_name: editName }))
+      setIsEditingAccount(false)
+
+    } catch (err) {
+      alert('Gagal memperbarui nama: ' + err.message)
+    } finally {
+      setIsSaving(false)
+    }
+  }
 
   async function handleToggleHideProduct(id, currentHiddenStatus) {
     try {
@@ -296,6 +324,8 @@ function ProfilePage({ user, onNavigate, onLogout, listingsVersion = 0 }) {
           <div className="dashboard-greeting">Halo, {firstName}</div>
 
           <section className="dashboard-cards">
+            
+            {/* 🌟 KOTAK INFORMASI AKUN (DENGAN FITUR INLINE EDITING) */}
             <article className="dashboard-card dashboard-card--account">
               <h2>INFORMASI AKUN</h2>
               <div className="dashboard-card__content account-summary">
@@ -308,14 +338,49 @@ function ProfilePage({ user, onNavigate, onLogout, listingsVersion = 0 }) {
                     </span>
                   )}
                 </div>
-                <div>
-                  <h3>{displayName}</h3>
-                  <p>Semarang, Jawa Tengah</p>
+                
+                <div style={{ flex: '1', minWidth: '0' }}>
+                  {isEditingAccount ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '10px' }}>
+                      <input 
+                        type="text" 
+                        value={editName}
+                        onChange={(e) => setEditName(e.target.value)}
+                        placeholder="Nama Lengkap Baru"
+                        style={{ width: '100%', padding: '8px 12px', borderRadius: '4px', border: '1px solid #ff7f00', outline: 'none' }}
+                        autoFocus
+                      />
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <button type="button" onClick={handleSaveProfile} disabled={isSaving} style={{ background: '#10b981', color: '#fff', border: 'none', padding: '6px 12px', borderRadius: '4px', fontWeight: 'bold', cursor: isSaving ? 'not-allowed' : 'pointer', fontSize: '0.85rem' }}>
+                          {isSaving ? 'Menyimpan...' : 'SIMPAN'}
+                        </button>
+                        <button type="button" onClick={() => setIsEditingAccount(false)} style={{ background: '#ef4444', color: '#fff', border: 'none', padding: '6px 12px', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.85rem' }}>
+                          BATAL
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <h3 style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>{displayName}</h3>
+                      <p>Semarang, Jawa Tengah</p>
+                    </>
+                  )}
                 </div>
+                
                 <p>Email Utama: {email}</p>
-                <p>Status Keamanan: Terverifikasi SSL</p>
-                <p>Enkripsi: Supabase Row Level Security</p>
-                <button type="button" onClick={() => onNavigate('edit-akun')}>EDIT AKUN</button>
+                {/* Info keamanan dan enkripsi bawaan template telah dihapus dari sini */}
+                
+                {!isEditingAccount && (
+                  <button 
+                    type="button" 
+                    onClick={() => {
+                      setEditName(cloudProfile.full_name || '')
+                      setIsEditingAccount(true)
+                    }}
+                  >
+                    EDIT AKUN
+                  </button>
+                )}
               </div>
             </article>
 
@@ -369,7 +434,7 @@ function ProfilePage({ user, onNavigate, onLogout, listingsVersion = 0 }) {
         </div>
       </section>
 
-      {/* 🌟 PERBAIKAN FOOTER: Mengaktifkan Tautan Menu Informasi Startup REVIVO */}
+      {/* FOOTER */}
       <footer className="site-footer" style={{ marginTop: '50px', borderTop: '1px solid #e2e8f0', paddingTop: '40px' }}>
         <div className="site-footer__top" style={{ display: 'flex', justifyContent: 'space-between', gap: '30px', flexWrap: 'wrap', marginBottom: '30px' }}>
           <div className="footer-brand" style={{ flex: '1', minWidth: '250px' }}>
