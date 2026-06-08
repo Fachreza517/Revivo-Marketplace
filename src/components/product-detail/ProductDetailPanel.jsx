@@ -11,6 +11,7 @@ const TABS = [
   { id: 'reviews', label: 'REVIEW' },
 ]
 
+// 🌟 PERBAIKAN 1: Tambahkan onContactSeller ke dalam daftar Props
 function ProductDetailPanel({ 
   product, 
   onNavigate, 
@@ -20,7 +21,8 @@ function ProductDetailPanel({
   reviewState,
   isWishlisted = false,
   onToggleWishlist,
-  togglingWishlist = false
+  togglingWishlist = false,
+  onContactSeller
 }) {
   const [quantity, setQuantity] = useState(1)
   const [activeTab, setActiveTab] = useState('description')
@@ -57,7 +59,6 @@ function ProductDetailPanel({
             alt={product.name}
           />
           
-          {/* BARIS UTAMA THUMBNAIL + TOMBOL LOVE KECIL */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
             
             <div className="product-detail__thumbs" style={{ margin: 0, flex: 1 }}>
@@ -73,7 +74,6 @@ function ProductDetailPanel({
               ))}
             </div>
 
-            {/* 🌟 PENJELASAN 1: TOMBOL LOVE BULAT KECIL (BERADA DI BAWAH GAMBAR BESAR) */}
             {onToggleWishlist && (
               <button
                 type="button"
@@ -81,21 +81,14 @@ function ProductDetailPanel({
                 disabled={togglingWishlist}
                 title={isWishlisted ? "Hapus dari Favorit" : "Tambah ke Favorit"}
                 style={{
-                  background: 'none',
-                  border: 'none',
-                  fontSize: '2.2rem', // Ukuran ikon hati yang pas
+                  background: 'none', border: 'none', fontSize: '2.2rem',
                   cursor: togglingWishlist ? 'not-allowed' : 'pointer',
-                  padding: '5px 15px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  transition: 'transform 0.2s ease',
-                  outline: 'none'
+                  padding: '5px 15px', display: 'flex', alignItems: 'center',
+                  justifyContent: 'center', transition: 'transform 0.2s ease', outline: 'none'
                 }}
                 onMouseOver={(e) => e.currentTarget.style.transform = 'scale(1.15)'}
                 onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
               >
-                {/* 🌟 PENJELASAN 2: Jika isWishlisted bernilai TRUE, render hati merah ❤️, jika FALSE render hati abu-abu/putih 🤍 */}
                 {isWishlisted ? '❤️' : '🤍'}
               </button>
             )}
@@ -125,33 +118,12 @@ function ProductDetailPanel({
             <span className="product-detail__stock">Stok: {product.stock} unit</span>
           </div>
 
+          {/* 🌟 PERBAIKAN 2: Sambungkan langsung onChat ke prop onContactSeller tanpa logika dummy */}
           <ProductSellerCard
             seller={product.seller}
-            onChat={() => {
-              if (product.sellerId && product.sellerId.startsWith('user-')) {
-                onNavigate('chat', {
-                  threadId: product.sellerId,
-                  chatBootstrap: {
-                    id: product.sellerId,
-                    name: product.seller.shopName,
-                    avatar: product.seller.avatar,
-                    location: product.seller.location,
-                    unread: 0,
-                    online: true,
-                    preview: 'Halo! Terima kasih sudah melihat listing saya.',
-                    time: 'Baru',
-                    messages: [
-                      { id: 'welcome', sender: 'them', text: 'Halo! Terima kasih sudah melihat listing saya. Ada yang ingin ditanyakan?', time: 'Baru' },
-                    ],
-                  },
-                })
-                return
-              }
-              onNavigate('chat', { threadId: product.sellerId || 'default-bot' })
-            }}
+            onChat={onContactSeller} 
           />
 
-          {/* 🌟 PENJELASAN 3: Tombol Wishlist panjang di sini sudah dibersihkan, menyisakan Tombol Keranjang murni */}
           <div className="product-detail__actions">
             <button type="button" className="button button--cart" onClick={handleAddToCart}>
               TAMBAH KE KERANJANG
