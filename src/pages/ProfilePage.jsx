@@ -67,31 +67,33 @@ function ProfilePage({ user, onNavigate, onLogout, listingsVersion = 0 }) {
   const [loading, setLoading] = useState(true)
   const [refreshTrigger, setRefreshTrigger] = useState(0) 
   
-  // 🌟 BERSIHKAN DATA TEMPLATE DARI SINI
+  // 🌟 State Bersih (Tanpa Data Template)
   const [cloudProfile, setCloudProfile] = useState({
     username: '',
     full_name: '',
     address: ''
   })
 
-  // Mode Edit Nama
+  // State Manajemen Edit Nama
   const [isEditingAccount, setIsEditingAccount] = useState(false)
   const [editName, setEditName] = useState('')
   const [isSavingName, setIsSavingName] = useState(false)
 
-  // Mode Edit Alamat
+  // State Manajemen Edit Alamat
   const [isEditingAddress, setIsEditingAddress] = useState(false)
   const [editAddress, setEditAddress] = useState('')
   const [isSavingAddress, setIsSavingAddress] = useState(false)
 
-  // Variabel Penampil Dinamis
+  // Variabel Dinamis UI
   const email = user?.email || 'email@belum-diatur.com'
   const displayName = cloudProfile.full_name || 'Pengguna Revivo'
-  const initials = displayName.split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase()
   
-  // Ambil nama kota dari alamat untuk ditampilkan di bawah avatar
+  // 🌟 PENYELESAIAN BUG: Fallback aman agar proses split() tidak mogok
+  const initials = (displayName || 'P R').split(' ').map((part) => part?.[0] || '').join('').slice(0, 2).toUpperCase()
+  
+  // Ekstrak kota/provinsi dari alamat panjang
   const shortLocation = cloudProfile.address 
-    ? cloudProfile.address.split(',').slice(-2).join(', ').trim() // Mengambil bagian akhir alamat (biasanya kota/provinsi)
+    ? cloudProfile.address.split(',').slice(-2).join(', ').trim()
     : 'Lokasi belum diatur'
 
   useEffect(() => {
@@ -132,7 +134,7 @@ function ProfilePage({ user, onNavigate, onLogout, listingsVersion = 0 }) {
     loadUserDashboardData()
   }, [user, listingsVersion, refreshTrigger])
 
-  // 🌟 FUNGSI SIMPAN NAMA (Menggunakan upsert agar tidak gagal pada user baru)
+  // FUNGSI SIMPAN NAMA KE DATABASE CLOUD
   async function handleSaveProfile() {
     if (!editName.trim()) return
     setIsSavingName(true)
@@ -154,7 +156,7 @@ function ProfilePage({ user, onNavigate, onLogout, listingsVersion = 0 }) {
     }
   }
 
-  // 🌟 FUNGSI SIMPAN ALAMAT UTAMA
+  // FUNGSI SIMPAN ALAMAT UTAMA KE DATABASE CLOUD
   async function handleSaveAddress() {
     if (!editAddress.trim()) return
     setIsSavingAddress(true)
@@ -176,7 +178,6 @@ function ProfilePage({ user, onNavigate, onLogout, listingsVersion = 0 }) {
     }
   }
 
-  // ... (Fungsi Hapus & Toggle Gawai tetap sama)
   async function handleToggleHideProduct(id, currentHiddenStatus) {
     try {
       const nextStatus = currentHiddenStatus ? 'available' : 'hidden'
@@ -226,7 +227,7 @@ function ProfilePage({ user, onNavigate, onLogout, listingsVersion = 0 }) {
 
           <section className="dashboard-cards">
             
-            {/* KOTAK 1: INFORMASI AKUN */}
+            {/* KOTAK 1: INFORMASI AKUN (INLINE EDIT NAMA) */}
             <article className="dashboard-card dashboard-card--account">
               <h2>INFORMASI AKUN</h2>
               <div className="dashboard-card__content account-summary">
@@ -276,7 +277,7 @@ function ProfilePage({ user, onNavigate, onLogout, listingsVersion = 0 }) {
               </div>
             </article>
 
-            {/* KOTAK 2: ALAMAT UTAMA (DIUBAH MENJADI BISA DIEDIT LANGSUNG) */}
+            {/* KOTAK 2: ALAMAT UTAMA (INLINE EDIT ALAMAT) */}
             <article className="dashboard-card">
               <h2>ALAMAT UTAMA</h2>
               <div className="dashboard-card__content">
@@ -358,9 +359,55 @@ function ProfilePage({ user, onNavigate, onLogout, listingsVersion = 0 }) {
 
       {/* FOOTER */}
       <footer className="site-footer" style={{ marginTop: '50px', borderTop: '1px solid #e2e8f0', paddingTop: '40px' }}>
-        {/* ... (Footer tetap sama seperti sebelumnya) ... */}
+        <div className="site-footer__top" style={{ display: 'flex', justifyContent: 'space-between', gap: '30px', flexWrap: 'wrap', marginBottom: '30px' }}>
+          <div className="footer-brand" style={{ flex: '1', minWidth: '250px' }}>
+            <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#ff7f00', marginBottom: '10px' }}>REVIVO</h2>
+            <p style={{ color: '#cbd5e1', fontSize: '0.95rem', lineHeight: '1.5' }}>
+              Marketplace elektronik bekas terpercaya dengan garansi kualitas dan harga terbaik.
+            </p>
+          </div>
+
+          {footerGroups && footerGroups.map((group) => (
+            <div className="footer-links" key={group.title} style={{ display: 'flex', flexDirection: 'column', gap: '8px', minWidth: '150px' }}>
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 'bold', color: '#fff', marginBottom: '5px' }}>{group.title}</h3>
+              {group.links.map((link) => {
+                let tabKey = 'tentang-kami'
+                if (link === 'Cara Kerja') tabKey = 'cara-kerja'
+                if (link === 'Syarat & Ketentuan') tabKey = 'syarat-ketentuan'
+                if (link === 'Kebijakan Privasi') tabKey = 'kebijakan-privasi'
+                if (link === 'Lacak Pesanan') tabKey = 'lacak-pesanan'
+                
+                const targetPage = link === 'Lacak Pesanan' ? 'lacak-pesanan' : 'footer-content'
+
+                return (
+                  <button
+                    key={link}
+                    type="button"
+                    onClick={() => onNavigate(targetPage, { footerTab: tabKey })}
+                    style={{ background: 'none', border: 'none', color: '#cbd5e1', padding: '2px 0', textAlign: 'left', font: 'inherit', cursor: 'pointer', display: 'block', fontSize: '0.9rem', transition: 'color 0.2s ease' }}
+                    onMouseOver={(e) => e.currentTarget.style.color = '#ff7f00'}
+                    onMouseOut={(e) => e.currentTarget.style.color = '#cbd5e1'}
+                  >
+                    {link}
+                  </button>
+                )
+              })}
+            </div>
+          ))}
+        </div>
+
         <div className="site-footer__bottom" style={{ borderTop: '1px solid #334155', paddingTop: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '15px' }}>
           <p style={{ color: '#94a3b8', fontSize: '0.85rem' }}>(c) 2026 Revivo. Hak Cipta Dilindungi.</p>
+          <div className="payment-list" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <strong style={{ color: '#fff', fontSize: '0.9rem' }}>Metode Pembayaran:</strong>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              {paymentMethods && paymentMethods.map((method) => (
+                <span key={method} style={{ background: '#fff', color: '#0f172a', padding: '4px 12px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 'bold', textTransform: 'uppercase', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: '60px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
+                  {method}
+                </span>
+              ))}
+            </div>
+          </div>
         </div>
       </footer>
     </main>
