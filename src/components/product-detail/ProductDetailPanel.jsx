@@ -16,7 +16,7 @@ function ProductDetailPanel({
   onNavigate, 
   onAddToCart, 
   reviews = [], 
-  onSendReview, // 🌟 Ambil fungsi ini dari props
+  onSendReview, 
   reviewState,
   isWishlisted = false,
   onToggleWishlist,
@@ -27,7 +27,7 @@ function ProductDetailPanel({
   const [activeTab, setActiveTab] = useState('description')
   const [activeImage, setActiveImage] = useState(0)
 
-  // 🌟 TAMBAHAN: State untuk form ulasan baru
+  // State untuk form ulasan baru
   const [newRating, setNewRating] = useState(0)
   const [newComment, setNewComment] = useState('')
 
@@ -171,7 +171,7 @@ function ProductDetailPanel({
           {activeTab === 'reviews' && (
             <div style={{ padding: '10px 0' }}>
               
-              {/* 🌟 TAMBAHAN: Form Tulis Ulasan */}
+              {/* Form Tulis Ulasan */}
               <div style={{ marginBottom: '30px', padding: '20px', background: '#fff', border: '1px solid #ddd', borderRadius: '8px' }}>
                 <h3 style={{ margin: '0 0 10px 0', fontSize: '1.1rem', color: '#0d3b66' }}>Tulis Ulasan Anda</h3>
                 
@@ -219,7 +219,10 @@ function ProductDetailPanel({
                         <span style={{ color: '#ffc107', fontSize: '1.2rem', letterSpacing: '2px' }}>
                           {'★'.repeat(rev.rating || 5)}{'☆'.repeat(5 - (rev.rating || 5))}
                         </span>
-                        <span style={{ margin: '0 0 0 10px', fontSize: '0.85rem', color: '#666', fontWeight: 'bold' }}>Pembeli</span>
+                        {/* Menampilkan nama pembeli dari database */}
+                        <span style={{ margin: '0 0 0 10px', fontSize: '0.85rem', color: '#666', fontWeight: 'bold' }}>
+                          {rev.buyer_name || 'Pembeli'}
+                        </span>
                       </div>
                       <p style={{ margin: 0, fontSize: '1rem', color: '#333' }}>"{rev.comment}"</p>
                     </li>

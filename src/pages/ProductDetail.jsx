@@ -16,6 +16,8 @@ function ProductDetail({ productId, isAuthenticated, user, onNavigate }) {
   const [loading, setLoading] = useState(true)
   const [isWishlisted, setIsWishlisted] = useState(false)
   const [togglingWishlist, setTogglingWishlist] = useState(false)
+  
+  // 🌟 TAMBAHAN: State untuk menyimpan data review
   const [reviews, setReviews] = useState([]) 
 
   const fetchProductAndReviews = async () => {
@@ -41,6 +43,7 @@ function ProductDetail({ productId, isAuthenticated, user, onNavigate }) {
           sellerProfile = data;
         }
 
+        // 🌟 TAMBAHAN: Mengambil data review produk ini dari Supabase
         const { data: revData } = await supabase
           .from('reviews')
           .select('*')
@@ -57,7 +60,7 @@ function ProductDetail({ productId, isAuthenticated, user, onNavigate }) {
           id: prodData.id,
           name: prodData.name,
           description: prodData.description,
-          category: prodData.category,
+          category: prodData.category, // Penting untuk Tab Spesifikasi
           priceValue: priceVal,
           oldPriceValue: oldPriceVal, 
           discountPercent: discountPercent, 
@@ -106,7 +109,7 @@ function ProductDetail({ productId, isAuthenticated, user, onNavigate }) {
     }
   }
 
-  // 🌟 TAMBAHAN: Fungsi untuk mengirim ulasan ke Supabase
+  // 🌟 PERBAIKAN: Fungsi untuk mengirim ulasan ke Supabase beserta buyer_name
   async function handleSendReview(rating, comment) {
     if (!isAuthenticated || !user?.id) {
       alert('Silakan masuk (login) terlebih dahulu untuk memberikan ulasan.');
@@ -114,12 +117,16 @@ function ProductDetail({ productId, isAuthenticated, user, onNavigate }) {
       return;
     }
 
+    // Mengambil nama user dari metadata atau email
+    const buyerName = user.user_metadata?.username || user.email.split('@')[0] || 'Pembeli Rahasia';
+
     try {
       const { error } = await supabase.from('reviews').insert([{
         user_id: user.id,
         listing_id: productId,
         rating: rating,
-        comment: comment
+        comment: comment,
+        buyer_name: buyerName // 🌟 Tambahan untuk mengatasi error Not Null
       }]);
 
       if (error) throw error;
@@ -149,7 +156,7 @@ function ProductDetail({ productId, isAuthenticated, user, onNavigate }) {
     <StoreLayout isAuthenticated={isAuthenticated} onNavigate={onNavigate}>
       <ProductDetailPanel 
         product={product} 
-        reviews={reviews}
+        reviews={reviews} // 🌟 Mengirim data review ke panel
         onNavigate={onNavigate} 
         onContactSeller={() => onNavigate('chat')}
         isWishlisted={isWishlisted}
