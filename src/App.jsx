@@ -16,7 +16,7 @@ import Wishlist from './pages/Wishlist.jsx'
 import Bandingkan from './pages/Bandingkan.jsx'
 import KartuAlamat from './pages/KartuAlamat.jsx'
 import Pengaturan from './pages/Pengaturan.jsx'
-import PengaturanKeamanan from './pages/PengaturanKeamanan.jsx' // 🌟 TAMBAHAN
+import PengaturanKeamanan from './pages/PengaturanKeamanan.jsx'
 import EditAkun from './pages/EditAkun.jsx'
 
 // Import Halaman Dinamis Konten Footer & Toko
@@ -95,7 +95,17 @@ function App() {
   } else if (page === 'cart') {
     content = <Cart isAuthenticated={isAuthenticated} onNavigate={navigate} onCheckout={() => { if(!authUser) setPage('login'); else setPage('checkout') }} />
   } else if (page === 'chat') {
-    content = <Chat isAuthenticated={isAuthenticated} onNavigate={navigate} initialThreadId={activeChatThreadId} threadBootstrap={chatBootstrap} />
+    // 🌟 PERBAIKAN: Semua props digabung menjadi 1 pemanggilan Chat
+    content = (
+      <Chat 
+        isAuthenticated={isAuthenticated} 
+        onNavigate={navigate} 
+        initialThreadId={activeChatThreadId} 
+        initialProductId={selectedProductId} 
+        initialSellerId={selectedSellerId}
+        threadBootstrap={chatBootstrap} 
+      />
+    )
   } else if (page === 'checkout') {
     content = <Checkout isAuthenticated={isAuthenticated} onNavigate={navigate} />
   } else if (page === 'footer-content') {
@@ -110,7 +120,7 @@ function App() {
     content = <KartuAlamat isAuthenticated={isAuthenticated} onNavigate={navigate} />
   } else if (page === 'pengaturan') {
     content = <Pengaturan isAuthenticated={isAuthenticated} onNavigate={navigate} />
-  } else if (page === 'pengaturan-keamanan') { // 🌟 BARU
+  } else if (page === 'pengaturan-keamanan') {
     content = <PengaturanKeamanan isAuthenticated={isAuthenticated} onNavigate={navigate} />
   } else if (page === 'edit-akun') {
     content = <EditAkun isAuthenticated={isAuthenticated} onNavigate={navigate} />

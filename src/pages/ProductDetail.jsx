@@ -158,7 +158,7 @@ function ProductDetail({ productId, isAuthenticated, user, onNavigate }) {
         product={product} 
         reviews={reviews} // 🌟 Mengirim data review ke panel
         onNavigate={onNavigate} 
-        onContactSeller={() => onNavigate('chat')}
+        onContactSeller={() => onNavigate('chat', { productId: product.id, sellerId: product.sellerId })}
         isWishlisted={isWishlisted}
         onToggleWishlist={handleToggleWishlist}
         togglingWishlist={togglingWishlist}
