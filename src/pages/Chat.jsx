@@ -10,7 +10,11 @@ function Chat({ isAuthenticated, onNavigate, initialThreadId = null, initialProd
   const [loadingThreads, setLoadingThreads] = useState(true)
   const [currentUserId, setCurrentUserId] = useState(null)
   
+  // 🌟 TAMBAHAN: State untuk menyimpan jumlah pesan baru (unread)
+  const [unreadCounts, setUnreadCounts] = useState({})
+  
   const messagesEndRef = useRef(null)
+  const activeThreadRef = useRef(activeThreadId)
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -19,6 +23,15 @@ function Chat({ isAuthenticated, onNavigate, initialThreadId = null, initialProd
   useEffect(() => {
     scrollToBottom()
   }, [messages])
+
+  // Menyimpan ID thread aktif ke Ref agar bisa dibaca oleh fungsi Realtime
+  useEffect(() => {
+    activeThreadRef.current = activeThreadId;
+    if (activeThreadId) {
+      // Reset jumlah pesan baru menjadi 0 jika obrolan sedang dibuka
+      setUnreadCounts(prev => ({ ...prev, [activeThreadId]: 0 }));
+    }
+  }, [activeThreadId])
 
   // 1. CEK USER LOGIN
   useEffect(() => {
@@ -44,11 +57,7 @@ function Chat({ isAuthenticated, onNavigate, initialThreadId = null, initialProd
       setLoadingThreads(true);
 
       try {
-        // --- LOGIKA PEMBUATAN/PENGECEKAN THREAD BARU ---
-        // Jika user datang dari tombol "Chat Penjual" di halaman produk
         if (initialProductId && initialSellerId) {
-          
-          // Cek apakah thread untuk [Pembeli + Penjual + Produk ini] sudah pernah ada?
           const { data: existingThread, error: searchError } = await supabase
             .from('chat_threads')
             .select('id')
@@ -57,23 +66,17 @@ function Chat({ isAuthenticated, onNavigate, initialThreadId = null, initialProd
             .eq('listing_id', initialProductId)
             .maybeSingle();
 
-          if (searchError && searchError.code !== 'PGRST116') {
-             throw searchError; // Abaikan error jika data memang tidak ditemukan
-          }
+          if (searchError && searchError.code !== 'PGRST116') throw searchError;
 
           if (existingThread) {
-            // Jika sudah ada, jadikan thread ini sebagai yang aktif
             setActiveThreadId(existingThread.id);
           } else {
-            // Jika belum ada, BUAT THREAD BARU khusus untuk produk ini
             const { data: newThread, error: createError } = await supabase
               .from('chat_threads')
               .insert([{
                 buyer_id: currentUserId,
                 seller_id: initialSellerId,
                 listing_id: initialProductId
-                // Note: Jika di databasemu belum ada kolom 'listing_id' di tabel 'chat_threads', ini akan error.
-                // Pastikan tabel chat_threads memiliki kolom: id, buyer_id, seller_id, listing_id, created_at
               }])
               .select('id')
               .single();
@@ -82,9 +85,7 @@ function Chat({ isAuthenticated, onNavigate, initialThreadId = null, initialProd
             setActiveThreadId(newThread.id);
           }
         }
-        // ------------------------------------------------
 
-        // --- MUAT SELURUH DAFTAR RIWAYAT CHAT KIRI (SIDEBAR) ---
         const { data: threadsData, error: threadsError } = await supabase
           .from('chat_threads')
           .select(`
@@ -118,7 +119,6 @@ function Chat({ isAuthenticated, onNavigate, initialThreadId = null, initialProd
           
           setThreads(formattedThreads);
           
-          // Jika tidak ada request khusus (initialProductId), buka chat pertama di daftar
           if (!activeThreadId && !initialProductId) {
             setActiveThreadId(formattedThreads[0].id);
           }
@@ -135,7 +135,6 @@ function Chat({ isAuthenticated, onNavigate, initialThreadId = null, initialProd
     }
 
     initChat();
-    // Dependency dipisah dengan sengaja agar tidak infinite loop
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUserId, initialProductId, initialSellerId]);
 
@@ -143,7 +142,6 @@ function Chat({ isAuthenticated, onNavigate, initialThreadId = null, initialProd
   useEffect(() => {
     if (!activeThreadId) return;
 
-    // (Data Demo Simulator)
     if (activeThreadId === 'demo-simulasi-toko-1') {
       setMessages([{ id: 'm1', sender_id: 'toko-id-1', body: 'Halo gan! Terkait negosiasi harga gawai yang Anda tanyakan, boleh nego tipis ya.', created_at: new Date().toISOString() }]); return;
     }
@@ -167,21 +165,37 @@ function Chat({ isAuthenticated, onNavigate, initialThreadId = null, initialProd
     }
 
     loadMessageHistory();
+  }, [activeThreadId]);
 
-    const chatChannel = supabase
-      .channel(`room-${activeThreadId}`)
+  // 🌟 TAMBAHAN: SUBSCRIPTION REALTIME GLOBAL UNTUK INDIKATOR PESAN BARU
+  useEffect(() => {
+    if (!currentUserId) return;
+
+    const globalChannel = supabase
+      .channel('global-chat-channel')
       .on('postgres_changes', 
-        { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: `thread_id=eq.${activeThreadId}` },
+        { event: 'INSERT', schema: 'public', table: 'chat_messages' },
         (payload) => {
-          setMessages((prev) => [...prev, payload.new]);
+          const newMsg = payload.new;
+          
+          if (newMsg.thread_id === activeThreadRef.current) {
+            // Jika pesan untuk obrolan yang sedang dibuka, langsung munculkan
+            setMessages((prev) => [...prev, newMsg]);
+          } else {
+            // Jika pesan untuk obrolan lain, tambahkan lencana (badge) belum dibaca
+            setUnreadCounts(prev => ({
+              ...prev,
+              [newMsg.thread_id]: (prev[newMsg.thread_id] || 0) + 1
+            }));
+          }
         }
       )
       .subscribe();
 
     return () => {
-      supabase.removeChannel(chatChannel);
+      supabase.removeChannel(globalChannel);
     };
-  }, [activeThreadId]);
+  }, [currentUserId]);
 
   // 4. FUNGSI KIRIM CHAT INTERAKTIF
   async function sendMessage(event) {
@@ -196,7 +210,9 @@ function Chat({ isAuthenticated, onNavigate, initialThreadId = null, initialProd
 
       setTimeout(() => {
         const botMsg = { id: `b-${Date.now()}`, sender_id: 'toko-bot', body: `[Toko Membalas] "${text}" - Pesan diterima.`, created_at: new Date().toISOString() };
-        setMessages((prev) => [...prev, botMsg]);
+        if (activeThreadId === activeThreadRef.current) {
+           setMessages((prev) => [...prev, botMsg]);
+        }
       }, 1000);
       return;
     }
@@ -210,6 +226,35 @@ function Chat({ isAuthenticated, onNavigate, initialThreadId = null, initialProd
       setDraft('');
     } catch (err) {
       console.error(err.message);
+    }
+  }
+
+  // 🌟 TAMBAHAN: FUNGSI UNTUK MENGHAPUS RIWAYAT OBROLAN
+  async function handleDeleteThread() {
+    const confirmDelete = window.confirm('Apakah Anda yakin ingin menghapus obrolan ini secara permanen?');
+    if (!confirmDelete || !activeThreadId) return;
+
+    if (activeThreadId.startsWith('demo-simulasi-toko-')) {
+      alert('Mode simulasi tidak bisa dihapus.');
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('chat_threads')
+        .delete()
+        .eq('id', activeThreadId);
+
+      if (error) throw error;
+
+      // Hapus dari tampilan lokal (UI)
+      setThreads(prev => prev.filter(t => t.id !== activeThreadId));
+      setActiveThreadId(null);
+      setMessages([]);
+      alert('Obrolan berhasil dihapus.');
+    } catch (err) {
+      console.error('Gagal menghapus obrolan:', err.message);
+      alert('Gagal menghapus obrolan. Silakan coba lagi.');
     }
   }
 
@@ -242,6 +287,8 @@ function Chat({ isAuthenticated, onNavigate, initialThreadId = null, initialProd
             ) : (
               threads.map((t) => {
                 const isCurrent = t.id === activeThreadId;
+                const unreadCount = unreadCounts[t.id] || 0;
+
                 return (
                   <button
                     key={t.id}
@@ -253,9 +300,21 @@ function Chat({ isAuthenticated, onNavigate, initialThreadId = null, initialProd
                     <div style={{ minWidth: 0, flex: 1 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
                         <strong style={{ color: '#1e293b', fontSize: '0.9rem', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.name}</strong>
-                        <small style={{ color: '#94a3b8', fontSize: '0.7rem' }}>{t.time}</small>
+                        
+                        {/* 🌟 PERBAIKAN: Menampilkan lencana pesan baru di sebelah waktu */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          {unreadCount > 0 && (
+                            <span style={{ background: '#ef4444', color: '#fff', fontSize: '0.65rem', padding: '2px 6px', borderRadius: '10px', fontWeight: 'bold' }}>
+                              {unreadCount} Baru
+                            </span>
+                          )}
+                          <small style={{ color: '#94a3b8', fontSize: '0.7rem' }}>{t.time}</small>
+                        </div>
+
                       </div>
-                      <p style={{ margin: '4px 0 0 0', color: '#64748b', fontSize: '0.8rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.preview}</p>
+                      <p style={{ margin: '4px 0 0 0', color: '#64748b', fontSize: '0.8rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: unreadCount > 0 ? 'bold' : 'normal' }}>
+                        {t.preview}
+                      </p>
                     </div>
                   </button>
                 )
@@ -275,8 +334,16 @@ function Chat({ isAuthenticated, onNavigate, initialThreadId = null, initialProd
                   <h4 style={{ margin: 0, color: '#1e293b', fontSize: '1.1rem', fontWeight: 'bold' }}>{activeThread.productName}</h4>
                   <small style={{ color: '#64748b', fontSize: '0.85rem' }}>Penjual: {activeThread.name}</small>
                 </div>
-                <div style={{ textAlign: 'right' }}>
+
+                {/* 🌟 PERBAIKAN: Tombol Hapus Riwayat */}
+                <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px' }}>
                   <small style={{ color: '#10b981', fontWeight: '600', fontSize: '0.8rem', display: 'block' }}>● Terhubung</small>
+                  <button 
+                    onClick={handleDeleteThread}
+                    style={{ background: '#ef4444', color: '#fff', border: 'none', padding: '4px 10px', borderRadius: '4px', fontSize: '0.75rem', cursor: 'pointer', fontWeight: 'bold' }}
+                  >
+                    🗑️ Hapus Obrolan
+                  </button>
                 </div>
               </div>
 
