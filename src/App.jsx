@@ -73,6 +73,48 @@ function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
+  // 🌟 TAMBAHAN: Fungsi untuk menangani proses Login
+  async function handleLogin({ identifier, password }) {
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: identifier, 
+        password: password
+      });
+
+      if (error) throw error;
+      
+      setAuthUser(data.user);
+      navigate('landing'); 
+      alert('Berhasil masuk!');
+    } catch (err) {
+      console.error(err);
+      setMessage('Gagal masuk: Email atau kata sandi salah.');
+    }
+  }
+
+  // 🌟 TAMBAHAN: Fungsi untuk menangani proses Register/Daftar
+  async function handleSignup(formData) {
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email: formData.email,
+        password: formData.password,
+        options: {
+          data: {
+            username: formData.username
+          }
+        }
+      });
+
+      if (error) throw error;
+      
+      alert('Pendaftaran berhasil! Silakan periksa kotak masuk email Anda (termasuk folder spam) untuk konfirmasi.');
+      navigate('login');
+    } catch (err) {
+      console.error(err);
+      setMessage(`Gagal mendaftar: ${err.message}`);
+    }
+  }
+
   async function handleLogout() {
     await supabase.auth.signOut()
     setAuthUser(null)
@@ -83,7 +125,17 @@ function App() {
 
   let content
   if (page === 'login' || page === 'signup') {
-    content = <AuthPage mode={page} message={message} isAuthenticated={isAuthenticated} onNavigate={navigate} />
+    // 🌟 PERBAIKAN: Menambahkan properti onLogin dan onSignup ke AuthPage
+    content = (
+      <AuthPage 
+        mode={page} 
+        message={message} 
+        isAuthenticated={isAuthenticated} 
+        onNavigate={navigate}
+        onLogin={handleLogin}
+        onSignup={handleSignup}
+      />
+    )
   } else if (page === 'profile') {
     content = <ProfilePage user={authUser} onNavigate={navigate} onLogout={handleLogout} listingsVersion={listingsVersion} />
   } else if (page === 'shop') {
@@ -95,7 +147,6 @@ function App() {
   } else if (page === 'cart') {
     content = <Cart isAuthenticated={isAuthenticated} onNavigate={navigate} onCheckout={() => { if(!authUser) setPage('login'); else setPage('checkout') }} />
   } else if (page === 'chat') {
-    // 🌟 PERBAIKAN: Semua props digabung menjadi 1 pemanggilan Chat
     content = (
       <Chat 
         isAuthenticated={isAuthenticated} 
