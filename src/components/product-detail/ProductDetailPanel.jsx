@@ -16,7 +16,7 @@ function ProductDetailPanel({
   onNavigate, 
   onAddToCart, 
   reviews = [], 
-  onSendReview, 
+  onSendReview, // 🌟 Ambil fungsi ini dari props
   reviewState,
   isWishlisted = false,
   onToggleWishlist,
@@ -27,11 +27,24 @@ function ProductDetailPanel({
   const [activeTab, setActiveTab] = useState('description')
   const [activeImage, setActiveImage] = useState(0)
 
+  // 🌟 TAMBAHAN: State untuk form ulasan baru
+  const [newRating, setNewRating] = useState(0)
+  const [newComment, setNewComment] = useState('')
+
   const similar = product?.similarIds ? getProductsByIds(product.similarIds) : []
   const discount = savingsPercent(product.priceValue, product.oldPriceValue)
 
   function handleAddToCart() {
     onAddToCart(product.id, quantity)
+  }
+
+  function submitReview() {
+    if (newRating === 0) return alert('Silakan pilih rating bintang terlebih dahulu.');
+    if (!newComment.trim()) return alert('Silakan tulis komentar Anda.');
+    
+    onSendReview(newRating, newComment);
+    setNewRating(0);
+    setNewComment('');
   }
 
   return (
@@ -72,7 +85,6 @@ function ProductDetailPanel({
               ))}
             </div>
 
-            {/* TOMBOL WISHLIST */}
             <button
               type="button"
               onClick={onToggleWishlist}
@@ -143,10 +155,82 @@ function ProductDetailPanel({
           ))}
         </div>
 
-        {/* Tab Deskripsi, Spesifikasi, & Review (logika tetap sama) */}
-        {activeTab === 'description' && (
-          <div className="product-detail__tab-panel"><p>{product.description}</p></div>
-        )}
+        <div className="product-detail__tab-panel">
+          {activeTab === 'description' && (
+            <p>{product.description}</p>
+          )}
+
+          {activeTab === 'specs' && (
+            <div style={{ padding: '10px 0', lineHeight: '1.8' }}>
+              <p><strong>Kondisi Fisik:</strong> {product.score}</p>
+              <p><strong>Status Hardware:</strong> {product.badge}</p>
+              <p><strong>Kategori:</strong> {getCategoryLabel(product.category) || product.category}</p>
+            </div>
+          )}
+
+          {activeTab === 'reviews' && (
+            <div style={{ padding: '10px 0' }}>
+              
+              {/* 🌟 TAMBAHAN: Form Tulis Ulasan */}
+              <div style={{ marginBottom: '30px', padding: '20px', background: '#fff', border: '1px solid #ddd', borderRadius: '8px' }}>
+                <h3 style={{ margin: '0 0 10px 0', fontSize: '1.1rem', color: '#0d3b66' }}>Tulis Ulasan Anda</h3>
+                
+                {/* Pemilih Bintang */}
+                <div style={{ display: 'flex', gap: '5px', marginBottom: '15px' }}>
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <button
+                      key={star}
+                      type="button"
+                      onClick={() => setNewRating(star)}
+                      style={{ 
+                        background: 'none', border: 'none', fontSize: '2rem', cursor: 'pointer', 
+                        color: star <= newRating ? '#ffc107' : '#e4e5e9', padding: 0, outline: 'none' 
+                      }}
+                    >
+                      ★
+                    </button>
+                  ))}
+                </div>
+
+                <textarea
+                  value={newComment}
+                  onChange={(e) => setNewComment(e.target.value)}
+                  placeholder="Bagaimana kualitas produk ini?"
+                  rows="3"
+                  style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #ccc', marginBottom: '15px', resize: 'vertical', fontFamily: 'inherit' }}
+                />
+
+                <button
+                  type="button"
+                  onClick={submitReview}
+                  style={{ background: '#ff7f00', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
+                >
+                  KIRIM ULASAN
+                </button>
+              </div>
+
+              {/* Daftar Ulasan */}
+              {reviews.length > 0 ? (
+                <ul style={{ listStyle: 'none', padding: 0 }}>
+                  {reviews.map((rev, idx) => (
+                    <li key={idx} style={{ padding: '15px', borderBottom: '1px solid #eee', marginBottom: '10px', background: '#f9f9f9', borderRadius: '8px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', marginBottom: '8px' }}>
+                        {/* Menampilkan bintang sesuai rating */}
+                        <span style={{ color: '#ffc107', fontSize: '1.2rem', letterSpacing: '2px' }}>
+                          {'★'.repeat(rev.rating || 5)}{'☆'.repeat(5 - (rev.rating || 5))}
+                        </span>
+                        <span style={{ margin: '0 0 0 10px', fontSize: '0.85rem', color: '#666', fontWeight: 'bold' }}>Pembeli</span>
+                      </div>
+                      <p style={{ margin: 0, fontSize: '1rem', color: '#333' }}>"{rev.comment}"</p>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p style={{ fontStyle: 'italic', color: '#666' }}>Belum ada ulasan pembeli untuk produk ini.</p>
+              )}
+            </div>
+          )}
+        </div>
       </section>
     </div>
   )

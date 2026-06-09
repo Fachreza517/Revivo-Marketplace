@@ -16,6 +16,7 @@ function ProductDetail({ productId, isAuthenticated, user, onNavigate }) {
   const [loading, setLoading] = useState(true)
   const [isWishlisted, setIsWishlisted] = useState(false)
   const [togglingWishlist, setTogglingWishlist] = useState(false)
+  const [reviews, setReviews] = useState([]) 
 
   const fetchProductAndReviews = async () => {
     if (!productId) return
@@ -40,6 +41,13 @@ function ProductDetail({ productId, isAuthenticated, user, onNavigate }) {
           sellerProfile = data;
         }
 
+        const { data: revData } = await supabase
+          .from('reviews')
+          .select('*')
+          .eq('listing_id', productId)
+        
+        setReviews(revData || [])
+
         // Hitung diskon
         const priceVal = Number(prodData.price_value);
         const oldPriceVal = Number(prodData.old_price_value || 0);
@@ -49,9 +57,10 @@ function ProductDetail({ productId, isAuthenticated, user, onNavigate }) {
           id: prodData.id,
           name: prodData.name,
           description: prodData.description,
+          category: prodData.category,
           priceValue: priceVal,
-          oldPriceValue: oldPriceVal, // Kirim ini ke Panel untuk perhitungan di sana
-          discountPercent: discountPercent, // 🌟 Mengirim persentase diskon
+          oldPriceValue: oldPriceVal, 
+          discountPercent: discountPercent, 
           price: `Rp ${priceVal.toLocaleString('id-ID')}`,
           oldPrice: oldPriceVal > 0 ? `Rp ${oldPriceVal.toLocaleString('id-ID')}` : '',
           image: prodData.image_url || '/placeholder.svg',
@@ -97,6 +106,32 @@ function ProductDetail({ productId, isAuthenticated, user, onNavigate }) {
     }
   }
 
+  // 🌟 TAMBAHAN: Fungsi untuk mengirim ulasan ke Supabase
+  async function handleSendReview(rating, comment) {
+    if (!isAuthenticated || !user?.id) {
+      alert('Silakan masuk (login) terlebih dahulu untuk memberikan ulasan.');
+      onNavigate('login');
+      return;
+    }
+
+    try {
+      const { error } = await supabase.from('reviews').insert([{
+        user_id: user.id,
+        listing_id: productId,
+        rating: rating,
+        comment: comment
+      }]);
+
+      if (error) throw error;
+      
+      alert('Terima kasih! Ulasan Anda berhasil dikirim.');
+      fetchProductAndReviews(); // Refresh ulasan setelah berhasil dikirim
+    } catch (err) {
+      console.error(err);
+      alert('Gagal mengirim ulasan. Silakan coba lagi.');
+    }
+  }
+
   useEffect(() => {
     fetchProductAndReviews()
     async function checkWishlist() {
@@ -114,11 +149,22 @@ function ProductDetail({ productId, isAuthenticated, user, onNavigate }) {
     <StoreLayout isAuthenticated={isAuthenticated} onNavigate={onNavigate}>
       <ProductDetailPanel 
         product={product} 
+        reviews={reviews}
         onNavigate={onNavigate} 
         onContactSeller={() => onNavigate('chat')}
         isWishlisted={isWishlisted}
         onToggleWishlist={handleToggleWishlist}
         togglingWishlist={togglingWishlist}
+        onSendReview={handleSendReview} // 🌟 Kirim fungsi ke panel
+        onAddToCart={(id, quantity) => {
+          if (!isAuthenticated) {
+            alert('Silakan login untuk menambah ke keranjang');
+            onNavigate('login');
+          } else {
+            addItem({ ...product, quantity });
+            alert('Produk berhasil ditambahkan ke keranjang!');
+          }
+        }}
       />
     </StoreLayout>
   )
